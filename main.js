@@ -498,34 +498,44 @@ ipcMain.handle('add-trusted-domain', (event, domain) => {
 });
 
 ipcMain.handle('set-adblock-enabled', async (event, enabled) => {
-  adBlockEnabled = enabled;
-  if (blocker) {
-    const sessions = [
-      session.defaultSession,
-      ...BrowserWindow.getAllWindows().map(w => w.webContents.session)
-    ];
+  try {
+    adBlockEnabled = enabled;
+    console.log('Setting ad block to:', enabled);
     
-    if (browserView && !sessions.includes(browserView.webContents.session)) {
-      sessions.push(browserView.webContents.session);
-    }
-    
-    sessions.forEach(sess => {
-      if (enabled) {
-        blocker.enableBlockingInSession(sess, { allowlist: ALLOWLIST });
-      } else {
+    if (blocker) {
+      const sessions = [session.defaultSession];
+      
+      // Add browser view session if it exists
+      if (browserView && !browserView.webContents.isDestroyed()) {
+        sessions.push(browserView.webContents.session);
+      }
+      
+      // Add main window session
+      if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+        sessions.push(mainWindow.webContents.session);
+      }
+      
+      for (const sess of sessions) {
         try {
-          blocker.disableBlockingInSession(sess);
+          if (enabled) {
+            blocker.enableBlockingInSession(sess, { 
+              allowlist: ALLOWLIST,
+              guessRequestTypeFromUrl: true 
+            });
+          } else {
+            blocker.disableBlockingInSession(sess);
+          }
         } catch (err) {
-          // Ignore errors when disabling
+          console.warn('Session blocking error:', err.message);
         }
       }
-    });
-    
-    if (browserView && !browserView.webContents.isDestroyed()) {
-      browserView.webContents.reload();
     }
+    
+    return true;
+  } catch (error) {
+    console.error('Ad block toggle error:', error);
+    return false;
   }
-  return true;
 });
 
 ipcMain.handle('resize-browser-view', async (event, showSidebar) => {

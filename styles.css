@@ -179,6 +179,54 @@ body {
   transform: rotate(-45deg) translate(6px, -6px);
 }
 
+/* Mobile responsiveness */
+@media (max-width: 900px) {
+  .hamburger-toggle {
+    display: flex !important;
+  }
+  
+  .sidebar-left,
+  .sidebar-right {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar-left.mobile-open,
+  .sidebar-right.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+/* Toggle switches */
+.toggle {
+  width: 40px;
+  height: 20px;
+  background: #333;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.toggle.active {
+  background: #4CAF50;
+}
+
+.toggle-slider {
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease;
+}
+
+.toggle.active .toggle-slider {
+  transform: translateX(20px);
+}
+
 /* Mobile Responsive */
 @media (max-width: 900px) {
   .hamburger-toggle {

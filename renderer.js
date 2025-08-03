@@ -73,7 +73,10 @@ class MangaDownloader {
 
     // Listen for browser URL changes
     window.electronAPI.onBrowserUrlChanged((event, url) => {
-      document.getElementById('url-edit').value = url;
+      const urlEdit = document.getElementById('url-edit');
+      const urlInput = document.getElementById('url-input');
+      if (urlEdit) urlEdit.value = url;
+      if (urlInput && !urlInput.value) urlInput.value = url;
       this.currentUrl = url;
       this.updateUI();
     });
@@ -199,17 +202,15 @@ class MangaDownloader {
       }
     });
 
-    // Module buttons
-    document.querySelectorAll('.module-button').forEach(button => {
-      if (!button.id) { // Skip blank and settings buttons
-        button.addEventListener('click', () => {
-          const moduleName = button.dataset.module;
-          const module = this.modules.find(m => m.name.toLowerCase() === moduleName);
-          if (module) {
-            this.selectModule(module);
-          }
-        });
-      }
+    // Module buttons - ensure they're properly mapped
+    document.querySelectorAll('.module-button[data-module]').forEach(button => {
+      button.addEventListener('click', () => {
+        const moduleName = button.dataset.module;
+        const module = this.modules.find(m => m.name.toLowerCase() === moduleName);
+        if (module) {
+          this.selectModule(module);
+        }
+      });
     });
 
     // Navigation controls
