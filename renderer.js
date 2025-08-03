@@ -252,11 +252,14 @@ class MangaDownloader {
     });
 
     // Close browser
-    document.getElementById('close-browser').onclick = () => {
-      this.browserEnabled = false;
-      window.electronAPI.closeBrowser();
-      this.updateUI();
-    };
+    const closeBrowserBtn = document.getElementById('close-browser');
+    if (closeBrowserBtn) {
+      closeBrowserBtn.addEventListener('click', () => {
+        this.browserEnabled = false;
+        window.electronAPI.closeBrowser();
+        this.updateUI();
+      });
+    }
 
     // Download history button
     document.getElementById('download-history-btn').onclick = () => {
@@ -335,17 +338,24 @@ class MangaDownloader {
     };
 
     // Download buttons
-    document.getElementById('download-btn').onclick = () => {
-      if (this.isDownloading) {
-        this.cancelAllDownloads();
-      } else {
-        this.downloadManga();
-      }
-    };
+    const downloadBtn = document.getElementById('download-btn');
+    const downloadVideoBtn = document.getElementById('download-video-btn');
+    
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', () => {
+        if (this.isDownloading) {
+          this.cancelAllDownloads();
+        } else {
+          this.downloadManga();
+        }
+      });
+    }
 
-    document.getElementById('download-video-btn').onclick = () => {
-      this.showVideoQualityModal();
-    };
+    if (downloadVideoBtn) {
+      downloadVideoBtn.addEventListener('click', () => {
+        this.showVideoQualityModal();
+      });
+    }
 
     // Blank browser button
     document.getElementById('blank-browser-btn').onclick = () => {
@@ -596,8 +606,11 @@ class MangaDownloader {
   }
 
   async downloadManga() {
-    if (!this.currentUrl) {
-      alert('Please enter or paste a URL first');
+    const urlInput = document.getElementById('url-input');
+    const currentUrl = this.currentUrl || urlInput.value.trim();
+    
+    if (!currentUrl || currentUrl === 'about:blank') {
+      alert('Please enter or paste a valid URL first');
       return;
     }
 
@@ -609,27 +622,27 @@ class MangaDownloader {
     try {
       const downloadId = Date.now();
       this.isDownloading = true;
-      this.activeDownloads.set(downloadId, { url: this.currentUrl, status: 'downloading' });
+      this.activeDownloads.set(downloadId, { url: currentUrl, status: 'downloading' });
       
       // Add to history
       this.addToDownloadHistory({
         id: downloadId,
-        title: `${this.activeModule} - ${new URL(this.currentUrl).pathname}`,
-        url: this.currentUrl,
+        title: `${this.activeModule} - ${new URL(currentUrl).pathname}`,
+        url: currentUrl,
         status: 'downloading',
         progress: 0
       });
       
       this.updateUI();
       
-      const result = await window.electronAPI.downloadManga(
-        this.activeModule,
-        this.currentUrl,
-        { 
+      const result = await window.electronAPI.downloadManga({
+        module: this.activeModule,
+        url: currentUrl,
+        options: { 
           adultMode: this.adultMode,
           downloadPath: this.downloadPath
         }
-      );
+      });
       
       if (result.success) {
         this.updateDownloadProgress(downloadId, 100, 'complete');
@@ -651,8 +664,11 @@ class MangaDownloader {
   }
 
   async downloadVideo(quality = '1080p') {
-    if (!this.currentUrl) {
-      alert('Please enter or paste a URL first');
+    const urlInput = document.getElementById('url-input');
+    const currentUrl = this.currentUrl || urlInput.value.trim();
+    
+    if (!currentUrl || currentUrl === 'about:blank') {
+      alert('Please enter or paste a valid URL first');
       return;
     }
 
@@ -665,7 +681,7 @@ class MangaDownloader {
       this.addToDownloadHistory({
         id: downloadId,
         title: `Video - ${quality}`,
-        url: this.currentUrl,
+        url: currentUrl,
         status: 'downloading',
         progress: 0
       });
@@ -683,7 +699,7 @@ class MangaDownloader {
         console.log('Video event:', data);
       });
 
-      const result = await window.electronAPI.downloadVideo(this.currentUrl, { quality });
+      const result = await window.electronAPI.downloadVideo(currentUrl, { quality });
       
       if (result.success) {
         this.updateDownloadProgress(downloadId, 100, 'complete');
@@ -698,7 +714,9 @@ class MangaDownloader {
     } finally {
       this.videoDownloading = false;
       this.videoProgress = 0;
-      window.electronAPI.removeVideoListeners();
+      if (window.electronAPI.removeVideoListeners) {
+        window.electronAPI.removeVideoListeners();
+      }
       this.updateUI();
     }
   }
@@ -774,18 +792,25 @@ class MangaDownloader {
 
     // Update download button
     const downloadBtn = document.getElementById('download-btn');
-    downloadBtn.disabled = !this.currentUrl;
+    const urlInput = document.getElementById('url-input');
+    const hasValidUrl = this.currentUrl && this.currentUrl !== 'about:blank' || (urlInput && urlInput.value.trim() && urlInput.value.trim() !== 'about:blank');
     
-    if (this.isDownloading || this.activeDownloads.size > 0) {
-      downloadBtn.innerHTML = `<i class="fas fa-stop-circle"></i> Cancel Downloads (${this.activeDownloads.size})`;
-    } else {
-      downloadBtn.innerHTML = `<i class="fas fa-download"></i> Download`;
+    if (downloadBtn) {
+      downloadBtn.disabled = !hasValidUrl;
+      
+      if (this.isDownloading || this.activeDownloads.size > 0) {
+        downloadBtn.innerHTML = `<i class="fas fa-stop-circle"></i> Cancel Downloads (${this.activeDownloads.size})`;
+        downloadBtn.classList.add('downloading');
+      } else {
+        downloadBtn.innerHTML = `<i class="fas fa-download"></i> Download`;
+        downloadBtn.classList.remove('downloading');
+      }
     }
 
     // Video download button
     const videoBtn = document.getElementById('download-video-btn');
     if (videoBtn) {
-      videoBtn.disabled = !this.currentUrl || this.videoDownloading;
+      videoBtn.disabled = !hasValidUrl || this.videoDownloading;
       videoBtn.innerHTML = this.videoDownloading ? 
         `<i class="fas fa-sync fa-spin"></i> Downloading... ${Math.round(this.videoProgress)}%` : 
         `<i class="fas fa-video"></i> Download Video`;
