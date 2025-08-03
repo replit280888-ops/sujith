@@ -26,6 +26,50 @@ body {
   align-items: center;
   padding: 20px 0;
   border-right: 1px solid #333;
+  transition: transform 0.3s ease;
+  position: relative;
+  z-index: 100;
+}
+
+/* Hamburger Menu */
+.hamburger-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 24px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 15px;
+  z-index: 101;
+}
+
+.hamburger-toggle span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: #ccc;
+  border-radius: 1px;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
+  transform-origin: center;
+}
+
+.hamburger-toggle.active span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger-toggle.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-toggle.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(7px, -6px);
+}
+
+.hamburger-toggle:hover span {
+  background: #4CAF50;
 }
 
 .logo {
@@ -867,12 +911,85 @@ body {
 }
 
 @media (max-width: 900px) {
+  .hamburger-toggle {
+    display: flex;
+    position: fixed;
+    top: 10px;
+    left: 15px;
+    z-index: 1001;
+  }
+  
+  .sidebar-left {
+    position: fixed;
+    top: 0;
+    left: -60px;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+  
+  .sidebar-left.mobile-open {
+    left: 0;
+  }
+  
   .sidebar-right {
-    display: none;
+    position: fixed;
+    top: 0;
+    right: -300px;
+    height: 100vh;
+    z-index: 999;
+    transition: right 0.3s ease;
+    overflow-y: auto;
+  }
+  
+  .sidebar-right.mobile-open {
+    right: 0;
   }
   
   .main-content {
+    margin-left: 0;
     width: 100%;
+  }
+  
+  .browser-header {
+    padding-left: 50px;
+  }
+  
+  /* Mobile overlay */
+  .mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+  }
+  
+  .mobile-overlay.active {
+    display: block;
+  }
+}
+
+@media (max-width: 600px) {
+  .browser-controls {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .url-bar {
+    width: 100%;
+    order: 1;
+    margin: 5px 0;
+  }
+  
+  .nav-controls {
+    order: 0;
+  }
+  
+  .header-actions {
+    order: 0;
   }
 }
 

@@ -189,30 +189,42 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Resize handler with improved debouncing
+  // Optimized resize handler with RAF and better debouncing
   let resizeTimeout;
   let isResizing = false;
+  let animationFrameId;
   
-  mainWindow.on('resize', () => {
+  const handleResize = () => {
     if (isResizing) return;
     
     clearTimeout(resizeTimeout);
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+    }
+    
     resizeTimeout = setTimeout(() => {
-      isResizing = true;
-      if (browserView && isBrowserVisible && !browserView.webContents.isDestroyed()) {
-        const [width, height] = mainWindow.getContentSize();
-        const rightSidebarWidth = 300;
-        const newBounds = {
-          x: 60,
-          y: 48,
-          width: Math.max(100, width - 60 - rightSidebarWidth),
-          height: Math.max(100, height - 48)
-        };
-        browserView.setBounds(newBounds);
-      }
-      isResizing = false;
-    }, 50);
-  });
+      animationFrameId = requestAnimationFrame(() => {
+        isResizing = true;
+        if (browserView && isBrowserVisible && !browserView.webContents.isDestroyed()) {
+          const [width, height] = mainWindow.getContentSize();
+          const leftSidebarWidth = mainWindow.webContents.isDevToolsOpened() ? 60 : 60;
+          const rightSidebarWidth = 300;
+          const newBounds = {
+            x: leftSidebarWidth,
+            y: 48,
+            width: Math.max(100, width - leftSidebarWidth - rightSidebarWidth),
+            height: Math.max(100, height - 48)
+          };
+          browserView.setBounds(newBounds);
+        }
+        isResizing = false;
+      });
+    }, 16); // ~60fps
+  };
+  
+  mainWindow.on('resize', handleResize);
+  mainWindow.on('maximize', handleResize);
+  mainWindow.on('unmaximize', handleResize);
 }
 
 function createBrowserView(url) {
@@ -284,6 +296,7 @@ function resizeBrowserView() {
 
 app.whenReady().then(async () => {
   try {
+    // Initialize ad blocker with optimized settings
     blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
       path: path.join(app.getPath('userData'), 'adblocker-engine.bin'),
       read: async (path) => {
@@ -296,7 +309,18 @@ app.whenReady().then(async () => {
       write: async (path, data) => {
         await fs.promises.writeFile(path, data);
       },
+      enableCompression: true,
+      loadCosmeticFilters: true,
+      loadGenericCosmeticFilters: false, // Optimize performance
     });
+    
+    // Enable on default session immediately
+    if (adBlockEnabled) {
+      blocker.enableBlockingInSession(session.defaultSession, { 
+        allowlist: ALLOWLIST,
+        guessRequestTypeFromUrl: true
+      });
+    }
   } catch (e) {
     console.error('Adblocker initialization failed:', e);
     blocker = null;

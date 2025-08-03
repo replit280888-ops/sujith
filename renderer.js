@@ -141,6 +141,46 @@ class MangaDownloader {
   }
 
   setupEventListeners() {
+    // Hamburger menu toggle
+    const hamburgerToggle = document.getElementById('hamburger-toggle');
+    const sidebarLeft = document.querySelector('.sidebar-left');
+    const sidebarRight = document.querySelector('.sidebar-right');
+    let mobileOverlay = document.querySelector('.mobile-overlay');
+    
+    // Create mobile overlay if it doesn't exist
+    if (!mobileOverlay) {
+      mobileOverlay = document.createElement('div');
+      mobileOverlay.className = 'mobile-overlay';
+      document.body.appendChild(mobileOverlay);
+    }
+    
+    if (hamburgerToggle) {
+      hamburgerToggle.addEventListener('click', () => {
+        hamburgerToggle.classList.toggle('active');
+        sidebarLeft.classList.toggle('mobile-open');
+        sidebarRight.classList.toggle('mobile-open');
+        mobileOverlay.classList.toggle('active');
+      });
+    }
+    
+    // Close menu when clicking overlay
+    mobileOverlay.addEventListener('click', () => {
+      hamburgerToggle.classList.remove('active');
+      sidebarLeft.classList.remove('mobile-open');
+      sidebarRight.classList.remove('mobile-open');
+      mobileOverlay.classList.remove('active');
+    });
+    
+    // Close menu on window resize to desktop size
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 900) {
+        hamburgerToggle.classList.remove('active');
+        sidebarLeft.classList.remove('mobile-open');
+        sidebarRight.classList.remove('mobile-open');
+        mobileOverlay.classList.remove('active');
+      }
+    });
+
     // Module buttons
     document.querySelectorAll('.module-button').forEach(button => {
       if (!button.id) { // Skip blank and settings buttons
@@ -214,22 +254,31 @@ class MangaDownloader {
     };
 
     document.getElementById('adblock-toggle').onclick = async () => {
+      const toggle = document.getElementById('adblock-toggle');
       const newState = !this.adBlockEnabled;
-      this.adBlockEnabled = newState;
-      this.updateUI();
-
+      
+      // Prevent rapid clicking
+      toggle.style.pointerEvents = 'none';
+      
       try {
+        this.adBlockEnabled = newState;
+        this.updateUI();
+        
         const success = await window.electronAPI.setAdBlockEnabled(newState);
         if (!success) {
           this.adBlockEnabled = !newState;
           this.updateUI();
-          alert('Failed to update ad blocker settings');
+          console.warn('Failed to update ad blocker settings');
         }
       } catch (error) {
         console.error('Error toggling ad block:', error);
         this.adBlockEnabled = !newState;
         this.updateUI();
-        alert(`Error: ${error.message || 'Unknown error'}`);
+      } finally {
+        // Re-enable after 500ms to prevent rapid toggling
+        setTimeout(() => {
+          toggle.style.pointerEvents = 'auto';
+        }, 500);
       }
     };
 
