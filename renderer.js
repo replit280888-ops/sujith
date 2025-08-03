@@ -40,13 +40,21 @@ class MangaDownloader {
 
   init() {
     console.log('MangaDownloader init called');
-    this.renderModuleButtons();
-    this.setupEventListeners();
-    this.loadDownloadHistory();
-    this.initializeBrowserState();
     
-    // Add cleanup on page unload
-    window.addEventListener('beforeunload', () => this.cleanup());
+    try {
+      this.loadDownloadHistory();
+      this.renderModuleButtons();
+      this.setupEventListeners();
+      this.initializeBrowserState();
+      this.updateUI();
+      
+      // Add cleanup on page unload
+      window.addEventListener('beforeunload', () => this.cleanup());
+      
+      console.log('MangaDownloader initialization completed successfully');
+    } catch (error) {
+      console.error('Error during initialization:', error);
+    }
   }
   
   cleanup() {
@@ -173,32 +181,34 @@ class MangaDownloader {
       document.body.appendChild(mobileOverlay);
     }
     
-    if (hamburgerToggle) {
+    if (hamburgerToggle && sidebarLeft && sidebarRight) {
       hamburgerToggle.addEventListener('click', (e) => {
         e.stopPropagation();
+        console.log('Hamburger toggle clicked');
         const isActive = hamburgerToggle.classList.contains('active');
         
         hamburgerToggle.classList.toggle('active', !isActive);
         sidebarLeft.classList.toggle('mobile-open', !isActive);
         sidebarRight.classList.toggle('mobile-open', !isActive);
-        mobileOverlay.style.display = isActive ? 'none' : 'block';
+        if (mobileOverlay) mobileOverlay.style.display = isActive ? 'none' : 'block';
       });
     }
     
     // Close menu when clicking overlay
     if (mobileOverlay) {
       mobileOverlay.addEventListener('click', () => {
-        hamburgerToggle.classList.remove('active');
-        sidebarLeft.classList.remove('mobile-open');
-        sidebarRight.classList.remove('mobile-open');
+        if (hamburgerToggle) hamburgerToggle.classList.remove('active');
+        if (sidebarLeft) sidebarLeft.classList.remove('mobile-open');
+        if (sidebarRight) sidebarRight.classList.remove('mobile-open');
         mobileOverlay.style.display = 'none';
       });
     }
     
     // Right sidebar toggle
-    if (sidebarRightToggle) {
+    if (sidebarRightToggle && sidebarRight) {
       sidebarRightToggle.addEventListener('click', (e) => {
         e.stopPropagation();
+        console.log('Right sidebar toggle clicked');
         sidebarRight.classList.toggle('collapsed');
         sidebarRightToggle.classList.toggle('active');
       });
@@ -207,24 +217,30 @@ class MangaDownloader {
     // Close menu on window resize to desktop size
     window.addEventListener('resize', () => {
       if (window.innerWidth > 900) {
-        hamburgerToggle.classList.remove('active');
-        sidebarLeft.classList.remove('mobile-open');
-        sidebarRight.classList.remove('mobile-open');
-        sidebarRight.classList.remove('collapsed');
+        if (hamburgerToggle) hamburgerToggle.classList.remove('active');
+        if (sidebarLeft) sidebarLeft.classList.remove('mobile-open');
+        if (sidebarRight) {
+          sidebarRight.classList.remove('mobile-open');
+          sidebarRight.classList.remove('collapsed');
+        }
         if (mobileOverlay) mobileOverlay.style.display = 'none';
       }
     });
 
-    // Module buttons - ensure they're properly mapped
-    document.querySelectorAll('.module-button[data-module]').forEach(button => {
-      button.addEventListener('click', () => {
-        const moduleName = button.dataset.module;
-        const module = this.modules.find(m => m.name.toLowerCase() === moduleName);
-        if (module) {
-          this.selectModule(module);
-        }
+    // Wait for module buttons to be rendered, then attach listeners
+    setTimeout(() => {
+      document.querySelectorAll('.module-button[data-module]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('Module button clicked:', button.dataset.module);
+          const moduleName = button.dataset.module;
+          const module = this.modules.find(m => m.name.toLowerCase() === moduleName);
+          if (module) {
+            this.selectModule(module);
+          }
+        });
       });
-    });
+    }, 100);
 
     // Navigation controls
     const backBtn = document.getElementById('browser-back');
@@ -232,24 +248,27 @@ class MangaDownloader {
     const refreshBtn = document.getElementById('browser-refresh');
     
     if (backBtn) {
-      backBtn.onclick = () => {
+      backBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Back button clicked');
         window.electronAPI.navigateBrowser('back');
-      };
+      });
     }
     
     if (forwardBtn) {
-      forwardBtn.onclick = () => {
+      forwardBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Forward button clicked');
         window.electronAPI.navigateBrowser('forward');
-      };
+      });
     }
     
     if (refreshBtn) {
-      refreshBtn.onclick = () => {
+      refreshBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Refresh button clicked');
         window.electronAPI.navigateBrowser('refresh');
-      };
+      });
     }
 
     // URL navigation
@@ -259,6 +278,7 @@ class MangaDownloader {
     if (urlEdit) {
       urlEdit.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+          e.preventDefault();
           console.log('Enter pressed in URL bar');
           this.navigateFromBrowserHeader();
         }
@@ -266,7 +286,8 @@ class MangaDownloader {
     }
     
     if (goBtn) {
-      goBtn.addEventListener('click', () => {
+      goBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Go button clicked');
         this.navigateFromBrowserHeader();
       });
@@ -275,7 +296,9 @@ class MangaDownloader {
     // Close browser
     const closeBrowserBtn = document.getElementById('close-browser');
     if (closeBrowserBtn) {
-      closeBrowserBtn.addEventListener('click', () => {
+      closeBrowserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Close browser clicked');
         this.browserEnabled = false;
         window.electronAPI.closeBrowser();
         this.updateUI();
@@ -285,18 +308,21 @@ class MangaDownloader {
     // Download history button
     const historyBtn = document.getElementById('download-history-btn');
     if (historyBtn) {
-      historyBtn.onclick = () => {
+      historyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Download history button clicked');
         this.showDownloadHistory();
-      };
+      });
     }
 
-    // Toggles
+    // Toggles with proper error handling
     const browserToggle = document.getElementById('browser-toggle');
     const adultToggle = document.getElementById('adult-toggle');
+    const adblockToggle = document.getElementById('adblock-toggle');
     
     if (browserToggle) {
-      browserToggle.onclick = () => {
+      browserToggle.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Browser toggle clicked');
         this.browserEnabled = !this.browserEnabled;
         this.updateUI();
@@ -308,69 +334,85 @@ class MangaDownloader {
         } else {
           window.electronAPI.closeBrowser();
         }
-      };
+      });
     }
 
     if (adultToggle) {
-      adultToggle.onclick = () => {
+      adultToggle.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Adult mode toggle clicked');
         this.adultMode = !this.adultMode;
         this.renderModuleButtons();
         this.updateUI();
-      };
+      });
     }
 
-    document.getElementById('adblock-toggle').onclick = async () => {
-      const toggle = document.getElementById('adblock-toggle');
-      const newState = !this.adBlockEnabled;
-      
-      // Prevent rapid clicking
-      toggle.style.pointerEvents = 'none';
-      
-      try {
-        this.adBlockEnabled = newState;
-        this.updateUI();
+    if (adblockToggle) {
+      adblockToggle.addEventListener('click', async (e) => {
+        e.preventDefault();
+        console.log('Adblock toggle clicked');
+        const newState = !this.adBlockEnabled;
         
-        const success = await window.electronAPI.setAdBlockEnabled(newState);
-        if (!success) {
+        // Prevent rapid clicking
+        adblockToggle.style.pointerEvents = 'none';
+        
+        try {
+          this.adBlockEnabled = newState;
+          this.updateUI();
+          
+          const success = await window.electronAPI.setAdBlockEnabled(newState);
+          if (!success) {
+            this.adBlockEnabled = !newState;
+            this.updateUI();
+            console.warn('Failed to update ad blocker settings');
+          }
+        } catch (error) {
+          console.error('Error toggling ad block:', error);
           this.adBlockEnabled = !newState;
           this.updateUI();
-          console.warn('Failed to update ad blocker settings');
+        } finally {
+          // Re-enable after 500ms to prevent rapid toggling
+          setTimeout(() => {
+            adblockToggle.style.pointerEvents = 'auto';
+          }, 500);
         }
-      } catch (error) {
-        console.error('Error toggling ad block:', error);
-        this.adBlockEnabled = !newState;
-        this.updateUI();
-      } finally {
-        // Re-enable after 500ms to prevent rapid toggling
-        setTimeout(() => {
-          toggle.style.pointerEvents = 'auto';
-        }, 500);
-      }
-    };
+      });
+    }
 
     // Download path
     const changePathBtn = document.getElementById('change-path-btn');
     if (changePathBtn) {
-      changePathBtn.onclick = () => {
+      changePathBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Change path button clicked');
         this.showDownloadPathModal();
-      };
+      });
     }
 
     // URL input
     const urlInput = document.getElementById('url-input');
     if (urlInput) {
-      urlInput.oninput = (e) => {
+      urlInput.addEventListener('input', (e) => {
         this.currentUrl = e.target.value;
         this.updateUI();
-      };
+      });
+      
+      urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const downloadBtn = document.getElementById('download-btn');
+          if (downloadBtn && !downloadBtn.disabled) {
+            this.downloadManga();
+          }
+        }
+      });
     }
 
     // Paste button
     const pasteBtn = document.getElementById('paste-btn');
     if (pasteBtn) {
-      pasteBtn.onclick = async () => {
+      pasteBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
         console.log('Paste button clicked');
         try {
           const url = await window.electronAPI.getBrowserUrl();
@@ -382,7 +424,7 @@ class MangaDownloader {
         } catch (error) {
           console.error('Error pasting URL:', error);
         }
-      };
+      });
     }
 
     // Download buttons
@@ -390,7 +432,9 @@ class MangaDownloader {
     const downloadVideoBtn = document.getElementById('download-video-btn');
     
     if (downloadBtn) {
-      downloadBtn.addEventListener('click', () => {
+      downloadBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Download button clicked');
         if (this.isDownloading) {
           this.cancelAllDownloads();
         } else {
@@ -400,7 +444,9 @@ class MangaDownloader {
     }
 
     if (downloadVideoBtn) {
-      downloadVideoBtn.addEventListener('click', () => {
+      downloadVideoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Download video button clicked');
         this.showVideoQualityModal();
       });
     }
@@ -408,71 +454,97 @@ class MangaDownloader {
     // Blank browser button
     const blankBrowserBtn = document.getElementById('blank-browser-btn');
     if (blankBrowserBtn) {
-      blankBrowserBtn.onclick = () => {
+      blankBrowserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Blank browser button clicked');
         this.activeModule = 'None';
         this.currentUrl = 'about:blank';
         this.updateUI();
         window.electronAPI.openBrowser(this.currentUrl);
-      };
+      });
     }
 
     // Settings button
     const settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) {
-      settingsBtn.onclick = () => {
+      settingsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         console.log('Settings clicked');
         // Add settings functionality here
-      };
+      });
     }
 
     // Modal event listeners
     this.setupModalEventListeners();
+    
+    console.log('All event listeners set up successfully');
   }
 
   setupModalEventListeners() {
     // Download History Modal
     const historyModal = document.getElementById('download-history-modal');
     const closeHistoryBtn = document.getElementById('close-history-modal');
+    const clearCompletedBtn = document.getElementById('clear-completed-btn');
+    const clearAllBtn = document.getElementById('clear-all-btn');
     
-    if (closeHistoryBtn) {
-      closeHistoryBtn.onclick = () => {
+    if (closeHistoryBtn && historyModal) {
+      closeHistoryBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Close history modal clicked');
         historyModal.classList.remove('active');
-      };
+      });
     }
 
-    document.getElementById('clear-completed-btn').onclick = () => {
-      this.clearCompletedDownloads();
-    };
+    if (clearCompletedBtn) {
+      clearCompletedBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Clear completed clicked');
+        this.clearCompletedDownloads();
+      });
+    }
 
-    document.getElementById('clear-all-btn').onclick = () => {
-      if (confirm('Are you sure you want to clear all download history?')) {
-        this.clearAllDownloads();
-      }
-    };
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Clear all clicked');
+        if (confirm('Are you sure you want to clear all download history?')) {
+          this.clearAllDownloads();
+        }
+      });
+    }
 
     // Video Quality Modal
     const qualityModal = document.getElementById('video-quality-modal');
     const closeQualityBtn = document.getElementById('close-quality-modal');
+    const startVideoDownloadBtn = document.getElementById('start-video-download-btn');
     
-    if (closeQualityBtn) {
-      closeQualityBtn.onclick = () => {
+    if (closeQualityBtn && qualityModal) {
+      closeQualityBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Close quality modal clicked');
         qualityModal.classList.remove('active');
-      };
+      });
     }
 
     // Quality option selection
     document.querySelectorAll('.quality-option').forEach(option => {
-      option.onclick = () => {
+      option.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Quality option selected:', option.dataset.quality);
         document.querySelectorAll('.quality-option').forEach(opt => opt.classList.remove('selected'));
         option.classList.add('selected');
-      };
+      });
     });
 
-    document.getElementById('start-video-download-btn').onclick = () => {
-      const selectedQuality = document.querySelector('.quality-option.selected')?.dataset.quality;
-      qualityModal.classList.remove('active');
-      this.downloadVideo(selectedQuality);
-    };
+    if (startVideoDownloadBtn && qualityModal) {
+      startVideoDownloadBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Start video download clicked');
+        const selectedQuality = document.querySelector('.quality-option.selected')?.dataset.quality || '1080p';
+        qualityModal.classList.remove('active');
+        this.downloadVideo(selectedQuality);
+      });
+    }
 
     // Download Path Modal
     const pathModal = document.getElementById('download-path-modal');
@@ -480,59 +552,75 @@ class MangaDownloader {
     const cancelPathBtn = document.getElementById('cancel-path-btn');
     const selectPathBtn = document.getElementById('select-path-btn');
     
-    if (closePathBtn) {
-      closePathBtn.onclick = () => {
+    if (closePathBtn && pathModal) {
+      closePathBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Close path modal clicked');
         pathModal.classList.remove('active');
-      };
+      });
     }
     
-    if (cancelPathBtn) {
-      cancelPathBtn.onclick = () => {
+    if (cancelPathBtn && pathModal) {
+      cancelPathBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Cancel path clicked');
         pathModal.classList.remove('active');
-      };
+      });
     }
 
     // Path option selection
     document.querySelectorAll('.path-option').forEach(option => {
-      option.onclick = () => {
+      option.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Path option selected');
         document.querySelectorAll('.path-option').forEach(opt => opt.classList.remove('selected'));
         option.classList.add('selected');
         
         const customPathInput = document.querySelector('.custom-path-input');
-        if (option.classList.contains('custom-path')) {
+        if (option.classList.contains('custom-path') && customPathInput) {
           customPathInput.style.display = 'block';
-        } else {
+        } else if (customPathInput) {
           customPathInput.style.display = 'none';
         }
-      };
+      });
     });
 
-    selectPathBtn.onclick = () => {
-      const selectedOption = document.querySelector('.path-option.selected');
-      if (selectedOption.classList.contains('custom-path')) {
-        const customPath = document.getElementById('custom-path-input').value.trim();
-        if (customPath) {
-          this.downloadPath = customPath;
+    if (selectPathBtn && pathModal) {
+      selectPathBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Select path clicked');
+        const selectedOption = document.querySelector('.path-option.selected');
+        if (selectedOption && selectedOption.classList.contains('custom-path')) {
+          const customPathInput = document.getElementById('custom-path-input');
+          const customPath = customPathInput ? customPathInput.value.trim() : '';
+          if (customPath) {
+            this.downloadPath = customPath;
+          }
+        } else if (selectedOption) {
+          const pathLocation = selectedOption.querySelector('.path-location')?.textContent;
+          if (pathLocation) {
+            this.downloadPath = pathLocation;
+          }
         }
-      } else {
-        const pathLocation = selectedOption.querySelector('.path-location')?.textContent;
-        if (pathLocation) {
-          this.downloadPath = pathLocation;
-        }
-      }
-      
-      this.updateDownloadPathDisplay();
-      pathModal.classList.remove('active');
-    };
+        
+        this.updateDownloadPathDisplay();
+        pathModal.classList.remove('active');
+      });
+    }
 
     // Close modals when clicking outside
     [historyModal, qualityModal, pathModal].forEach(modal => {
-      modal.onclick = (e) => {
-        if (e.target === modal) {
-          modal.classList.remove('active');
-        }
-      };
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            console.log('Modal background clicked, closing modal');
+            modal.classList.remove('active');
+          }
+        });
+      }
     });
+    
+    console.log('Modal event listeners set up successfully');
   }
 
   showDownloadHistory() {
