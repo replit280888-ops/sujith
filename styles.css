@@ -58,10 +58,12 @@ body {
   font-weight: bold;
   font-size: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: transform;
+  transform: translateZ(0); /* Enable GPU acceleration */
 }
 
 .module-button:hover {
@@ -503,6 +505,14 @@ body {
   z-index: 1000;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  will-change: opacity;
+}
+
+.modal.active {
+  display: flex;
+  opacity: 1;
 }
 
 .modal.active {

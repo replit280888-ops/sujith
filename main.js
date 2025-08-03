@@ -60,22 +60,34 @@ class DownloadManager {
 
   async executeDownload(downloadInfo, downloadId) {
     const { module, url, options } = downloadInfo;
+    const startTime = Date.now();
     
     // Send progress updates
     mainWindow?.webContents.send('download-progress', {
       downloadId,
       status: 'starting',
-      progress: 0
+      progress: 0,
+      startTime
     });
 
     try {
-      const downloaderModule = require(`./modules/${module.toLowerCase()}.js`);
-      const result = await downloaderModule.download({ url, ...options });
+      const moduleFile = `./modules/${module.toLowerCase()}.js`;
+      const downloaderModule = require(moduleFile);
+      
+      // Add timeout for downloads
+      const downloadPromise = downloaderModule.download({ url, ...options });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Download timeout after 30 minutes')), 1800000)
+      );
+      
+      const result = await Promise.race([downloadPromise, timeoutPromise]);
       
       mainWindow?.webContents.send('download-progress', {
         downloadId,
         status: 'complete',
-        progress: 100
+        progress: 100,
+        endTime: Date.now(),
+        duration: Date.now() - startTime
       });
 
       return result;
@@ -84,7 +96,9 @@ class DownloadManager {
         downloadId,
         status: 'error',
         progress: 0,
-        error: error.message
+        error: error.message,
+        endTime: Date.now(),
+        duration: Date.now() - startTime
       });
       throw error;
     }
@@ -175,31 +189,44 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Resize handler
+  // Resize handler with improved debouncing
   let resizeTimeout;
+  let isResizing = false;
+  
   mainWindow.on('resize', () => {
+    if (isResizing) return;
+    
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      if (browserView && isBrowserVisible) {
+      isResizing = true;
+      if (browserView && isBrowserVisible && !browserView.webContents.isDestroyed()) {
         const [width, height] = mainWindow.getContentSize();
         const rightSidebarWidth = 300;
-        browserView.setBounds({
+        const newBounds = {
           x: 60,
           y: 48,
-          width: width - 60 - rightSidebarWidth,
-          height: height - 48
-        });
+          width: Math.max(100, width - 60 - rightSidebarWidth),
+          height: Math.max(100, height - 48)
+        };
+        browserView.setBounds(newBounds);
       }
-    }, 100);
+      isResizing = false;
+    }, 50);
   });
 }
 
 function createBrowserView(url) {
   if (!mainWindow) return;
   
+  // Clean up existing browser view more thoroughly
   if (browserView && !browserView.webContents.isDestroyed()) {
-    mainWindow.removeBrowserView(browserView);
-    browserView.webContents.destroy();
+    try {
+      browserView.webContents.removeAllListeners();
+      mainWindow.removeBrowserView(browserView);
+      browserView.webContents.destroy();
+    } catch (e) {
+      console.error('Error cleaning up browser view:', e);
+    }
   }
   browserView = null;
 

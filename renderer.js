@@ -44,6 +44,20 @@ class MangaDownloader {
     this.setupEventListeners();
     this.loadDownloadHistory();
     
+    // Add cleanup on page unload
+    window.addEventListener('beforeunload', () => this.cleanup());
+  }
+  
+  cleanup() {
+    // Remove all event listeners to prevent memory leaks
+    if (this._videoProgressHandler) {
+      window.electronAPI.removeVideoListeners();
+    }
+    if (this._cachedElements) {
+      this._cachedElements = null;
+    }
+  }
+    
     // Get initial ad block state
     window.electronAPI.getGlobalAdblockState().then((enabled) => {
       this.adBlockEnabled = enabled;
@@ -651,17 +665,33 @@ class MangaDownloader {
   }
 
   updateUI() {
+    // Cache DOM elements to reduce lookups
+    if (!this._cachedElements) {
+      this._cachedElements = {
+        activeModuleName: document.getElementById('active-module-name'),
+        browserToggle: document.getElementById('browser-toggle'),
+        adultToggle: document.getElementById('adult-toggle'),
+        adblockToggle: document.getElementById('adblock-toggle'),
+        downloadBtn: document.getElementById('download-btn'),
+        videoBtn: document.getElementById('download-video-btn'),
+        urlInput: document.getElementById('url-input'),
+        moduleCount: document.getElementById('module-count'),
+        modeDisplay: document.getElementById('mode-display'),
+        videoProgress: document.getElementById('video-progress')
+      };
+    }
+    
+    const elements = this._cachedElements;
+    
     // Update active module display
-    document.getElementById('active-module-name').textContent = this.activeModule;
+    if (elements.activeModuleName.textContent !== this.activeModule) {
+      elements.activeModuleName.textContent = this.activeModule;
+    }
     
-    // Update toggles
-    const browserToggle = document.getElementById('browser-toggle');
-    const adultToggle = document.getElementById('adult-toggle');
-    const adblockToggle = document.getElementById('adblock-toggle');
-    
-    browserToggle.classList.toggle('active', this.browserEnabled);
-    adultToggle.classList.toggle('active', this.adultMode);
-    adblockToggle.classList.toggle('active', this.adBlockEnabled);
+    // Update toggles only if state changed
+    elements.browserToggle.classList.toggle('active', this.browserEnabled);
+    elements.adultToggle.classList.toggle('active', this.adultMode);
+    elements.adblockToggle.classList.toggle('active', this.adBlockEnabled);
 
     // Update download button
     const downloadBtn = document.getElementById('download-btn');
