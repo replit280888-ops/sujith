@@ -1,0 +1,51 @@
+{
+  "name": "manga-downloader",
+  "version": "1.0.0",
+  "description": "Multi-site manga downloader with embedded browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.mangadownloader.app",
+    "productName": "Manga Downloader",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules",
+      "!dist"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.5",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "@cliqz/adblocker-electron": "^1.24.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cross-fetch": "^4.0.0",
+    "fs-extra": "^11.3.0",
+    "playwright": "^1.54.2",
+    "puppeteer": "^21.0.0",
+    "yt-dlp-wrap": "^2.3.12"
+  }
+}

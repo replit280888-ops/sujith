@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Downloader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <div class="sidebar-left">
+            <div class="modules-header">Modules</div>
+            <div id="module-buttons">
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=nhentai.net" alt="nhentai logo"> nhentai
+                </button>
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=hitomi.la" alt="hitomi logo"> hitomi
+                </button>
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=asuratoon.com" alt="asura logo"> asura
+                </button>
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=colamanga.com" alt="colamanga logo"> colamanga
+                </button>
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=erossan.com" alt="erosscan logo"> erosscan
+                </button>
+                <button class="module-button">
+                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=hentai2read.com" alt="hentai2read logo"> hentai2read
+                </button>
+            </div>
+            <button id="blank-browser-btn" class="module-button" style="margin-top:16px;width:40px;height:40px;background:#888;color:#fff;border-radius:50%;border:none;cursor:pointer;display:block;">Blank</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="browser-header">
+                <button id="close-button" style="margin-left: 10px;">
+                  <i class="fas fa-times"></i> Close
+                </button>
+                <div class="browser-controls">
+  <div class="traffic-lights">
+    <div class="light red" id="close-browser"></div>
+    <div class="light yellow" id="minimize-browser"></div>
+    <div class="light green" id="maximize-browser"></div>
+  </div>
+  <div class="nav-controls">
+    <button id="browser-back" title="Back"><i class="fas fa-arrow-left"></i></button>
+    <button id="browser-forward" title="Forward"><i class="fas fa-arrow-right"></i></button>
+    <button id="browser-refresh" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+  </div>
+  <div class="url-bar">
+    <input type="text" id="url-edit" value="about:blank" spellcheck="false" placeholder="Enter URL..." title="URL input">
+    <button id="go-btn">Go</button>
+  </div>
+</div>
+            </div>
+            <div class="browser-content" id="browser-content">
+                <!-- We'll show a placeholder only when browser is not visible -->
+                <div class="browser-placeholder" id="browser-placeholder">
+                    <i class="fas fa-globe"></i>
+                    <p>Select a module to load website</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="sidebar-right">
+            <div class="controls-header">
+                <div>Controls</div>
+                <button id="sidebar-toggle" class="hamburger-btn" title="Toggle sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <div class="active-module">
+                <div class="label">Active Module</div>
+                <div class="value" id="active-module-name">None</div>
+            </div>
+            
+            <div class="toggle-group">
+                <div class="toggle-item">
+                    <span>Browser View</span>
+                    <div class="toggle" id="browser-toggle">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
+                
+                <div class="toggle-item">
+                    <span>Adult Mode</span>
+                    <div class="toggle" id="adult-toggle">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
+                
+                <div class="toggle-item">
+                    <span>Ad Blocker</span>
+                    <div class="toggle" id="adblock-toggle">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="url-input-section">
+                <div class="label">URL Input</div>
+                <div class="input-group">
+                    <input type="text" id="url-input" placeholder="Enter or paste URL..." autocomplete="off">
+                    <button id="paste-btn" title="Paste URL from browser">
+                        <i class="fas fa-paste"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <button id="download-btn" class="download-button" disabled>
+                <i class="fas fa-download"></i>
+                Download
+            </button>
+            <button id="download-video-btn" class="download-button">
+                <i class="fas fa-video"></i> Download Video
+            </button>
+            
+            <div class="status-info">
+                <div class="status-item">
+                    <span>Status:</span>
+                    <span class="status-ready">Ready</span>
+                </div>
+                <div class="status-item">
+                    <span>Modules:</span>
+                    <span id="module-count">0 loaded</span>
+                </div>
+                <div class="status-item">
+                    <span>Mode:</span>
+                    <span id="mode-display">Regular</span>
+                </div>
+                <div class="status-item">
+                    <span>Video Progress:</span>
+                    <span id="video-progress">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button id="expand-sidebar-btn" class="expand-btn" title="Expand sidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <script src="renderer.js"></script>
+</body>
+</html>
