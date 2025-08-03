@@ -151,6 +151,7 @@ class MangaDownloader {
     const hamburgerToggle = document.getElementById('hamburger-toggle');
     const sidebarLeft = document.querySelector('.sidebar-left');
     const sidebarRight = document.querySelector('.sidebar-right');
+    const sidebarRightToggle = document.getElementById('sidebar-right-toggle');
     let mobileOverlay = document.querySelector('.mobile-overlay');
     
     // Create mobile overlay if it doesn't exist
@@ -192,12 +193,22 @@ class MangaDownloader {
       });
     }
     
+    // Right sidebar toggle
+    if (sidebarRightToggle) {
+      sidebarRightToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebarRight.classList.toggle('collapsed');
+        sidebarRightToggle.classList.toggle('active');
+      });
+    }
+
     // Close menu on window resize to desktop size
     window.addEventListener('resize', () => {
       if (window.innerWidth > 900) {
         hamburgerToggle.classList.remove('active');
         sidebarLeft.classList.remove('mobile-open');
         sidebarRight.classList.remove('mobile-open');
+        sidebarRight.classList.remove('collapsed');
         if (mobileOverlay) mobileOverlay.style.display = 'none';
       }
     });

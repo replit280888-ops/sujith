@@ -1,112 +1,166 @@
-const { chromium } = require('playwright');
-const fs = require('fs-extra');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const fs = require('fs');
 const path = require('path');
 
-class ColaMangaDownloader {
+class ColamangaDownloader {
   constructor() {
     this.baseUrl = 'https://colamanga.com';
-    this.browser = null;
-    this.page = null;
+    this.headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none'
+    };
   }
 
-  async initialize() {
+  async getChapterImages(chapterUrl) {
     try {
-      this.browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      const response = await axios.get(chapterUrl, { 
+        headers: this.headers,
+        timeout: 30000,
+        maxRedirects: 5
       });
-      this.page = await this.browser.newPage();
-      await this.page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-      );
+      const $ = cheerio.load(response.data);
+
+      const images = [];
+
+      // Try multiple selectors for colamanga
+      const selectors = [
+        'img.img-fluid',
+        'img[data-src]',
+        'img[src*="manga"]',
+        '.chapter-img img',
+        '.manga-img img',
+        'img.lazy',
+        'img[src*="colamanga"]'
+      ];
+
+      for (const selector of selectors) {
+        $(selector).each((index, element) => {
+          const src = $(element).attr('data-src') || $(element).attr('src');
+          if (src && (src.includes('.jpg') || src.includes('.png') || src.includes('.jpeg') || src.includes('.webp'))) {
+            const fullUrl = src.startsWith('http') ? src : this.baseUrl + src;
+            if (!images.includes(fullUrl)) {
+              images.push(fullUrl);
+            }
+          }
+        });
+      }
+
+      // If no images found, try script tags for dynamic loading
+      if (images.length === 0) {
+        $('script').each((index, element) => {
+          const scriptContent = $(element).html();
+          if (scriptContent && scriptContent.includes('img')) {
+            const matches = scriptContent.match(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi);
+            if (matches) {
+              images.push(...matches);
+            }
+          }
+        });
+      }
+
+      return [...new Set(images)]; // Remove duplicates
     } catch (error) {
-      console.error('Failed to initialize browser:', error);
-      throw error;
+      throw new Error(`Failed to get chapter images: ${error.message}`);
     }
   }
 
-  async extractChapterInfo(url) {
+  async downloadImage(imageUrl, chapterDir, index) {
     try {
-      await this.page.goto(url, { waitUntil: 'networkidle' });
+      const response = await axios.get(imageUrl, {
+        responseType: 'stream',
+        headers: this.headers,
+        timeout: 30000,
+        maxRedirects: 5
+      });
 
-      const title = await this.page.textContent('h1, .manga-title, .chapter-title').catch(() => 'Unknown');
-      const images = await this.page.$$eval('img[src*="manga"], .chapter-image img, .page-image img', 
-        imgs => imgs.map(img => img.src).filter(src => src && src.includes('http'))
-      );
+      const filename = `page_${String(index).padStart(3, '0')}.${imageUrl.split('.').pop().split('?')[0]}`;
+      const filePath = path.join(chapterDir, filename);
+
+      const writer = fs.createWriteStream(filePath);
+
+      response.data.pipe(writer);
+
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => {
+          console.log(`Downloaded image ${index}: ${filename}`);
+          resolve({ success: true, filename: filename });
+        });
+        writer.on('error', (error) => {
+          console.error(`Error writing image ${index}: ${error.message}`);
+          fs.unlink(filePath, () => reject({ success: false, error: error.message }));
+        });
+      });
+    } catch (error) {
+      console.error(`Failed to download image ${index}: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  getChapterName(chapterUrl) {
+    const parts = chapterUrl.split('/');
+    return parts[parts.length - 2] || 'Unknown_Chapter';
+  }
+
+  async download({ url, downloadPath = './downloads' }) {
+    try {
+      console.log(`Starting Colamanga download from: ${url}`);
+
+      // Validate URL
+      if (!url.includes('colamanga.com')) {
+        throw new Error('Invalid Colamanga URL');
+      }
+
+      const images = await this.getChapterImages(url);
+
+      if (images.length === 0) {
+        throw new Error('No images found on this page. The chapter might be behind a paywall or require login.');
+      }
+
+      console.log(`Found ${images.length} images for download`);
+
+      const chapterName = this.getChapterName(url);
+      const chapterDir = path.join(downloadPath, 'colamanga', chapterName);
+
+      if (!fs.existsSync(chapterDir)) {
+        fs.mkdirSync(chapterDir, { recursive: true });
+      }
+
+      // Download images with retry logic
+      const downloadResults = [];
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const result = await this.downloadImage(images[i], chapterDir, i + 1);
+          downloadResults.push(result);
+        } catch (error) {
+          console.warn(`Failed to download image ${i + 1}: ${error.message}`);
+        }
+      }
+
+      const successCount = downloadResults.filter(r => r.success).length;
 
       return {
-        title: title.trim(),
-        images: images,
-        totalPages: images.length
+        success: successCount > 0,
+        message: `Downloaded ${successCount}/${images.length} images`,
+        path: chapterDir,
+        totalImages: images.length,
+        downloadedImages: successCount
       };
     } catch (error) {
-      console.error('Error extracting chapter info:', error);
-      throw error;
-    }
-  }
-
-  async downloadImages(chapterInfo, downloadPath) {
-    const { title, images } = chapterInfo;
-    const sanitizedTitle = title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_');
-    const chapterDir = path.join(downloadPath, sanitizedTitle);
-
-    await fs.ensureDir(chapterDir);
-
-    for (let i = 0; i < images.length; i++) {
-      try {
-        const imageUrl = images[i];
-        const extension = path.extname(new URL(imageUrl).pathname) || '.jpg';
-        const filename = `page_${String(i + 1).padStart(3, '0')}${extension}`;
-        const imagePath = path.join(chapterDir, filename);
-
-        const response = await this.page.goto(imageUrl);
-        const buffer = await response.body();
-        await fs.writeFile(imagePath, buffer);
-
-        console.log(`Downloaded: ${filename}`);
-      } catch (error) {
-        console.error(`Failed to download image ${i + 1}:`, error);
-      }
-    }
-
-    return chapterDir;
-  }
-
-  async cleanup() {
-    if (this.browser) {
-      await this.browser.close();
+      console.error('Colamanga download error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
 
-async function download({ url, downloadPath = './downloads', ...options }) {
-  const downloader = new ColaMangaDownloader();
-
-  try {
-    await downloader.initialize();
-    const chapterInfo = await downloader.extractChapterInfo(url);
-
-    if (chapterInfo.images.length === 0) {
-      throw new Error('No images found on this page');
-    }
-
-    const savedPath = await downloader.downloadImages(chapterInfo, downloadPath);
-
-    return {
-      success: true,
-      title: chapterInfo.title,
-      totalPages: chapterInfo.totalPages,
-      savedPath: savedPath
-    };
-  } catch (error) {
-    console.error('Download failed:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  } finally {
-    await downloader.cleanup();
-  }
-}
-
-module.exports = { download };
+module.exports = ColamangaDownloader;
