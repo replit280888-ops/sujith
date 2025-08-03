@@ -358,12 +358,24 @@ class MangaDownloader {
     }
 
     // Blank browser button
-    document.getElementById('blank-browser-btn').onclick = () => {
-      this.activeModule = 'None';
-      this.currentUrl = 'about:blank';
-      this.updateUI();
-      window.electronAPI.openBrowser(this.currentUrl);
-    };
+    const blankBrowserBtn = document.getElementById('blank-browser-btn');
+    if (blankBrowserBtn) {
+      blankBrowserBtn.onclick = () => {
+        this.activeModule = 'None';
+        this.currentUrl = 'about:blank';
+        this.updateUI();
+        window.electronAPI.openBrowser(this.currentUrl);
+      };
+    }
+
+    // Settings button
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+      settingsBtn.onclick = () => {
+        console.log('Settings clicked');
+        // Add settings functionality here
+      };
+    }
 
     // Modal event listeners
     this.setupModalEventListeners();
@@ -374,9 +386,11 @@ class MangaDownloader {
     const historyModal = document.getElementById('download-history-modal');
     const closeHistoryBtn = document.getElementById('close-history-modal');
     
-    closeHistoryBtn.onclick = () => {
-      historyModal.classList.remove('active');
-    };
+    if (closeHistoryBtn) {
+      closeHistoryBtn.onclick = () => {
+        historyModal.classList.remove('active');
+      };
+    }
 
     document.getElementById('clear-completed-btn').onclick = () => {
       this.clearCompletedDownloads();
@@ -392,9 +406,11 @@ class MangaDownloader {
     const qualityModal = document.getElementById('video-quality-modal');
     const closeQualityBtn = document.getElementById('close-quality-modal');
     
-    closeQualityBtn.onclick = () => {
-      qualityModal.classList.remove('active');
-    };
+    if (closeQualityBtn) {
+      closeQualityBtn.onclick = () => {
+        qualityModal.classList.remove('active');
+      };
+    }
 
     // Quality option selection
     document.querySelectorAll('.quality-option').forEach(option => {
@@ -416,13 +432,17 @@ class MangaDownloader {
     const cancelPathBtn = document.getElementById('cancel-path-btn');
     const selectPathBtn = document.getElementById('select-path-btn');
     
-    closePathBtn.onclick = () => {
-      pathModal.classList.remove('active');
-    };
+    if (closePathBtn) {
+      closePathBtn.onclick = () => {
+        pathModal.classList.remove('active');
+      };
+    }
     
-    cancelPathBtn.onclick = () => {
-      pathModal.classList.remove('active');
-    };
+    if (cancelPathBtn) {
+      cancelPathBtn.onclick = () => {
+        pathModal.classList.remove('active');
+      };
+    }
 
     // Path option selection
     document.querySelectorAll('.path-option').forEach(option => {
