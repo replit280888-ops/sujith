@@ -1,5 +1,5 @@
+
 function isValidUrl(url) {
-  // Accept 'about:blank' and valid http/https URLs
   if (url === 'about:blank') return true;
   try {
     const u = new URL(url);
@@ -16,12 +16,16 @@ class MangaDownloader {
     this.adultMode = false;
     this.currentUrl = '';
     this.downloadQueue = [];
+    this.activeDownloads = new Map();
+    this.downloadHistory = [];
     this.isDownloading = false;
     this.browserVisible = false;
     this.sidebarCollapsed = false;
-    this.adBlockEnabled = true; // Default to enabled
+    this.adBlockEnabled = true;
     this.videoDownloading = false;
     this.videoProgress = 0;
+    this.downloadPath = '/Users/Downloads';
+    this.maxConcurrentDownloads = 3;
     this.modules = [
       { name: 'Colamanga', url: 'https://colamanga.com', color: '#FF6B6B' },
       { name: 'Asura', url: 'https://asuracomic.net/', color: '#4ECDC4' },
@@ -29,52 +33,17 @@ class MangaDownloader {
       { name: 'nHentai', url: 'https://nhentai.net', color: '#96CEB4', adult: true },
       { name: 'Hentai2Read', url: 'https://hentai2read.com/', color: '#FFEAA7', adult: true },
       { name: 'MangaDex', url: 'https://mangadex.org', color: '#DDA0DD' },
-      { name: 'Hitomi', url: 'https://hitomi.la', color: '#98D8C8',adult: true }
+      { name: 'Hitomi', url: 'https://hitomi.la', color: '#98D8C8', adult: true }
     ];
     this.init();
   }
 
-  async downloadVideo() {
-    if (!this.currentUrl) {
-      alert('Please enter or paste a URL first');
-      return;
-    }
-
-    try {
-      this.videoDownloading = true;
-      this.videoProgress = 0;
-      this.updateUI();
-
-      // Setup progress listeners
-      window.electronAPI.onVideoProgress((event, progress) => {
-        this.videoProgress = progress.percent;
-        this.updateUI();
-      });
-
-      window.electronAPI.onVideoEvent((event, data) => {
-        console.log('Video event:', data);
-      });
-
-      const result = await window.electronAPI.downloadVideo(this.currentUrl);
-      if (result.success) {
-        alert('Video downloaded successfully!');
-      } else {
-        alert(`Video download failed: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Video download error:', error);
-      alert(`Video download failed: ${error.message || 'Unknown error'}`);
-    } finally {
-      this.videoDownloading = false;
-      window.electronAPI.removeVideoListeners();
-      this.updateUI();
-    }
-  }
-  
   init() {
     console.log('MangaDownloader init called');
     this.renderModuleButtons();
     this.setupEventListeners();
+    this.loadDownloadHistory();
+    
     // Get initial ad block state
     window.electronAPI.getGlobalAdblockState().then((enabled) => {
       this.adBlockEnabled = enabled;
@@ -84,45 +53,64 @@ class MangaDownloader {
       this.adBlockEnabled = true;
       this.updateUI();
     });
+
     // Listen for browser URL changes
     window.electronAPI.onBrowserUrlChanged((event, url) => {
-      // Update URL display in browser header
       document.getElementById('url-edit').value = url;
       this.currentUrl = url;
       this.updateUI();
     });
   }
-  
+
   renderModuleButtons() {
-    console.log('renderModuleButtons called');
     const container = document.getElementById('module-buttons');
     const filteredModules = this.getFilteredModules();
-    console.log('Filtered modules:', filteredModules);
+    
     container.innerHTML = '';
     filteredModules.forEach(module => {
       const button = document.createElement('button');
       button.className = 'module-button';
       button.style.backgroundColor = module.color;
-      button.textContent = module.name.substring(0, 2).toUpperCase();
+      button.dataset.module = module.name.toLowerCase();
+      
+      const span = document.createElement('span');
+      span.textContent = module.name.substring(0, 2).toUpperCase();
+      button.appendChild(span);
+      
       button.title = module.name;
       button.onclick = () => {
-        console.log('Module button clicked:', module);
         this.selectModule(module);
       };
+      
       if (module.name === this.activeModule) {
         button.classList.add('active');
       }
+      
       container.appendChild(button);
     });
-    console.log('Module buttons rendered:', container.children.length);
   }
-  
+
   getFilteredModules() {
     return this.modules.filter(module => this.adultMode || !module.adult);
   }
-  
+
   selectModule(module) {
+    // Remove active class from all buttons
+    document.querySelectorAll('.module-button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Add active class to selected button
+    document.querySelector(`[data-module="${module.name.toLowerCase()}"]`)?.classList.add('active');
+    
     this.activeModule = module.name;
+    
+    // Update active module dot color
+    const dot = document.getElementById('active-module-dot');
+    if (dot) {
+      dot.style.backgroundColor = module.color;
+    }
+    
     // Add domain to trusted list
     try {
       const domain = new URL(module.url).hostname;
@@ -130,31 +118,68 @@ class MangaDownloader {
     } catch (e) {
       console.error('Error adding trusted domain:', e);
     }
-    // Add YouTube to trusted domains if using blank browser
-    if (this.activeModule === 'None') {
-      window.electronAPI.addTrustedDomain('youtube.com');
-      window.electronAPI.addTrustedDomain('www.youtube.com');
-      window.electronAPI.addTrustedDomain('youtu.be');
-    }
+
     this.currentUrl = module.url;
     this.updateUI();
+    
     // Always open browser when selecting module
     window.electronAPI.openBrowser(this.currentUrl);
-    setTimeout(() => {
-      window.electronAPI.resizeBrowserView(!this.sidebarCollapsed);
-    }, 100);
   }
-  
+
   setupEventListeners() {
-    // Add close button functionality
-    const closeButton = document.getElementById('close-button');
-    if (closeButton) {
-      closeButton.addEventListener('click', () => {
-        window.electronAPI.windowClose();
-      });
-    }
-    // ...existing code for event listeners...
-    // Browser toggle
+    // Module buttons
+    document.querySelectorAll('.module-button').forEach(button => {
+      if (!button.id) { // Skip blank and settings buttons
+        button.addEventListener('click', () => {
+          const moduleName = button.dataset.module;
+          const module = this.modules.find(m => m.name.toLowerCase() === moduleName);
+          if (module) {
+            this.selectModule(module);
+          }
+        });
+      }
+    });
+
+    // Navigation controls
+    document.getElementById('browser-back').onclick = () => {
+      window.electronAPI.navigateBrowser('back');
+    };
+    
+    document.getElementById('browser-forward').onclick = () => {
+      window.electronAPI.navigateBrowser('forward');
+    };
+    
+    document.getElementById('browser-refresh').onclick = () => {
+      window.electronAPI.navigateBrowser('refresh');
+    };
+
+    // URL navigation
+    const urlEdit = document.getElementById('url-edit');
+    const goBtn = document.getElementById('go-btn');
+    
+    urlEdit.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        this.navigateFromBrowserHeader();
+      }
+    });
+    
+    goBtn.addEventListener('click', () => {
+      this.navigateFromBrowserHeader();
+    });
+
+    // Close browser
+    document.getElementById('close-browser').onclick = () => {
+      this.browserEnabled = false;
+      window.electronAPI.closeBrowser();
+      this.updateUI();
+    };
+
+    // Download history button
+    document.getElementById('download-history-btn').onclick = () => {
+      this.showDownloadHistory();
+    };
+
+    // Toggles
     document.getElementById('browser-toggle').onclick = () => {
       this.browserEnabled = !this.browserEnabled;
       this.updateUI();
@@ -167,43 +192,21 @@ class MangaDownloader {
         window.electronAPI.closeBrowser();
       }
     };
-    // Navigation controls
-    document.getElementById('browser-back').onclick = () => {
-      window.electronAPI.navigateBrowser('back');
-    };
-    document.getElementById('browser-forward').onclick = () => {
-      window.electronAPI.navigateBrowser('forward');
-    };
-    document.getElementById('browser-refresh').onclick = () => {
-      window.electronAPI.navigateBrowser('refresh');
-    };
-    const closeBtn = document.getElementById('close-browser');
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        this.browserEnabled = false;
-        window.electronAPI.closeBrowser();
-        this.updateUI();
-      };
-    }
-    // Adult mode toggle
+
     document.getElementById('adult-toggle').onclick = () => {
       this.adultMode = !this.adultMode;
       this.renderModuleButtons();
       this.updateUI();
     };
-    
-    // AdBlock toggle
+
     document.getElementById('adblock-toggle').onclick = async () => {
       const newState = !this.adBlockEnabled;
-
-      // Optimistically update UI
       this.adBlockEnabled = newState;
       this.updateUI();
 
       try {
         const success = await window.electronAPI.setAdBlockEnabled(newState);
         if (!success) {
-          // Revert if operation failed
           this.adBlockEnabled = !newState;
           this.updateUI();
           alert('Failed to update ad blocker settings');
@@ -215,14 +218,19 @@ class MangaDownloader {
         alert(`Error: ${error.message || 'Unknown error'}`);
       }
     };
-    
+
+    // Download path
+    document.getElementById('change-path-btn').onclick = () => {
+      this.showDownloadPathModal();
+    };
+
     // URL input
     const urlInput = document.getElementById('url-input');
     urlInput.oninput = (e) => {
       this.currentUrl = e.target.value;
       this.updateUI();
     };
-    
+
     // Paste button
     document.getElementById('paste-btn').onclick = async () => {
       const url = await window.electronAPI.getBrowserUrl();
@@ -232,145 +240,397 @@ class MangaDownloader {
         this.updateUI();
       }
     };
-    
 
-    // Download button
+    // Download buttons
     document.getElementById('download-btn').onclick = () => {
       if (this.isDownloading) {
-        this.cancelDownload();
+        this.cancelAllDownloads();
       } else {
         this.downloadManga();
       }
     };
 
-    // Download video button
     document.getElementById('download-video-btn').onclick = () => {
-      this.downloadVideo();
+      this.showVideoQualityModal();
     };
+
+    // Blank browser button
+    document.getElementById('blank-browser-btn').onclick = () => {
+      this.activeModule = 'None';
+      this.currentUrl = 'about:blank';
+      this.updateUI();
+      window.electronAPI.openBrowser(this.currentUrl);
+    };
+
+    // Modal event listeners
+    this.setupModalEventListeners();
+  }
+
+  setupModalEventListeners() {
+    // Download History Modal
+    const historyModal = document.getElementById('download-history-modal');
+    const closeHistoryBtn = document.getElementById('close-history-modal');
     
-    // Add handler for URL input box (Enter key)
-    urlInput.onkeydown = (e) => {
-      if (e.key === 'Enter') {
-        const url = urlInput.value.trim();
-        if (url) {
-          window.electronAPI.openBrowser(url);
-        }
+    closeHistoryBtn.onclick = () => {
+      historyModal.classList.remove('active');
+    };
+
+    document.getElementById('clear-completed-btn').onclick = () => {
+      this.clearCompletedDownloads();
+    };
+
+    document.getElementById('clear-all-btn').onclick = () => {
+      if (confirm('Are you sure you want to clear all download history?')) {
+        this.clearAllDownloads();
       }
     };
-    // Add handler for Go button (if present)
-    const goBtn = document.getElementById('go-btn');
-    if (goBtn) {
-      goBtn.onclick = () => {
-        const url = urlInput.value.trim();
-        if (url) {
-          window.electronAPI.openBrowser(url);
+
+    // Video Quality Modal
+    const qualityModal = document.getElementById('video-quality-modal');
+    const closeQualityBtn = document.getElementById('close-quality-modal');
+    
+    closeQualityBtn.onclick = () => {
+      qualityModal.classList.remove('active');
+    };
+
+    // Quality option selection
+    document.querySelectorAll('.quality-option').forEach(option => {
+      option.onclick = () => {
+        document.querySelectorAll('.quality-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+      };
+    });
+
+    document.getElementById('start-video-download-btn').onclick = () => {
+      const selectedQuality = document.querySelector('.quality-option.selected')?.dataset.quality;
+      qualityModal.classList.remove('active');
+      this.downloadVideo(selectedQuality);
+    };
+
+    // Download Path Modal
+    const pathModal = document.getElementById('download-path-modal');
+    const closePathBtn = document.getElementById('close-path-modal');
+    const cancelPathBtn = document.getElementById('cancel-path-btn');
+    const selectPathBtn = document.getElementById('select-path-btn');
+    
+    closePathBtn.onclick = () => {
+      pathModal.classList.remove('active');
+    };
+    
+    cancelPathBtn.onclick = () => {
+      pathModal.classList.remove('active');
+    };
+
+    // Path option selection
+    document.querySelectorAll('.path-option').forEach(option => {
+      option.onclick = () => {
+        document.querySelectorAll('.path-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        
+        const customPathInput = document.querySelector('.custom-path-input');
+        if (option.classList.contains('custom-path')) {
+          customPathInput.style.display = 'block';
+        } else {
+          customPathInput.style.display = 'none';
         }
       };
-    }
-    // Blank browser button handler
-    const blankBtn = document.getElementById('blank-browser-btn');
-    if (blankBtn) {
-      blankBtn.onclick = () => {
-        this.activeModule = 'None';
-        this.currentUrl = 'about:blank';
-        this.updateUI();
-        window.electronAPI.openBrowser(this.currentUrl);
-      };
-    }
-    // Browser header navigation
-    const urlEdit = document.getElementById('url-edit');
-    if (urlEdit) {
-      urlEdit.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          this.navigateFromBrowserHeader();
+    });
+
+    selectPathBtn.onclick = () => {
+      const selectedOption = document.querySelector('.path-option.selected');
+      if (selectedOption.classList.contains('custom-path')) {
+        const customPath = document.getElementById('custom-path-input').value.trim();
+        if (customPath) {
+          this.downloadPath = customPath;
         }
-      });
+      } else {
+        const pathLocation = selectedOption.querySelector('.path-location')?.textContent;
+        if (pathLocation) {
+          this.downloadPath = pathLocation;
+        }
+      }
+      
+      this.updateDownloadPathDisplay();
+      pathModal.classList.remove('active');
+    };
+
+    // Close modals when clicking outside
+    [historyModal, qualityModal, pathModal].forEach(modal => {
+      modal.onclick = (e) => {
+        if (e.target === modal) {
+          modal.classList.remove('active');
+        }
+      };
+    });
+  }
+
+  showDownloadHistory() {
+    const modal = document.getElementById('download-history-modal');
+    this.renderDownloadHistory();
+    modal.classList.add('active');
+  }
+
+  showVideoQualityModal() {
+    if (!this.currentUrl) {
+      alert('Please enter or paste a URL first');
+      return;
+    }
+    
+    const modal = document.getElementById('video-quality-modal');
+    modal.classList.add('active');
+  }
+
+  showDownloadPathModal() {
+    const modal = document.getElementById('download-path-modal');
+    modal.classList.add('active');
+  }
+
+  renderDownloadHistory() {
+    const container = document.getElementById('download-list');
+    container.innerHTML = '';
+
+    if (this.downloadHistory.length === 0) {
+      container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No downloads yet</div>';
+      return;
     }
 
-    if (goBtn) {
-      goBtn.addEventListener('click', () => {
-        this.navigateFromBrowserHeader();
-      });
-    }
-    // Sidebar toggle
-    document.getElementById('sidebar-toggle').onclick = () => {
-      this.toggleSidebar();
-    };
-    document.getElementById('expand-sidebar-btn').onclick = () => {
-      this.toggleSidebar();
-    };
-    // Traffic lights handler for red button
-    const redBtn = document.getElementById('red');
-    if (redBtn) {
-      redBtn.onclick = () => {
-        window.electronAPI.windowClose();
-      };
+    this.downloadHistory.forEach((download, index) => {
+      const item = document.createElement('div');
+      item.className = 'download-item';
+      
+      item.innerHTML = `
+        <div class="download-header">
+          <div class="download-title">${download.title}</div>
+          <div class="download-actions">
+            <button title="Open File" onclick="app.openDownloadFile('${download.path}')">
+              <i class="fas fa-external-link-alt"></i>
+            </button>
+            <button title="Remove from History" onclick="app.removeFromHistory(${index})">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <div class="download-info">${download.url}</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${download.progress}%"></div>
+        </div>
+        <div class="download-status">
+          <span class="status-badge ${download.status}">${download.status.toUpperCase()}</span>
+          <span class="download-size">${download.size || '0 MB'}</span>
+        </div>
+      `;
+      
+      container.appendChild(item);
+    });
+  }
+
+  addToDownloadHistory(download) {
+    this.downloadHistory.unshift({
+      id: Date.now(),
+      title: download.title || 'Unknown',
+      url: download.url,
+      path: download.path || '',
+      status: download.status || 'downloading',
+      progress: download.progress || 0,
+      size: download.size || '0 MB',
+      timestamp: new Date()
+    });
+    
+    // Keep only last 50 downloads
+    this.downloadHistory = this.downloadHistory.slice(0, 50);
+    this.saveDownloadHistory();
+  }
+
+  updateDownloadProgress(downloadId, progress, status) {
+    const download = this.downloadHistory.find(d => d.id === downloadId);
+    if (download) {
+      download.progress = progress;
+      download.status = status;
+      this.saveDownloadHistory();
+      
+      // Update UI if modal is open
+      if (document.getElementById('download-history-modal').classList.contains('active')) {
+        this.renderDownloadHistory();
+      }
     }
   }
-  
+
+  clearCompletedDownloads() {
+    this.downloadHistory = this.downloadHistory.filter(d => d.status !== 'complete');
+    this.saveDownloadHistory();
+    this.renderDownloadHistory();
+  }
+
+  clearAllDownloads() {
+    this.downloadHistory = [];
+    this.saveDownloadHistory();
+    this.renderDownloadHistory();
+  }
+
+  removeFromHistory(index) {
+    this.downloadHistory.splice(index, 1);
+    this.saveDownloadHistory();
+    this.renderDownloadHistory();
+  }
+
+  openDownloadFile(path) {
+    // This would need to be implemented in the main process
+    console.log('Opening file:', path);
+  }
+
+  saveDownloadHistory() {
+    localStorage.setItem('downloadHistory', JSON.stringify(this.downloadHistory));
+  }
+
+  loadDownloadHistory() {
+    const saved = localStorage.getItem('downloadHistory');
+    if (saved) {
+      try {
+        this.downloadHistory = JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to load download history:', e);
+        this.downloadHistory = [];
+      }
+    }
+  }
+
+  updateDownloadPathDisplay() {
+    const display = document.getElementById('download-path-display');
+    const span = display.querySelector('span');
+    if (span) {
+      span.textContent = this.downloadPath;
+    }
+  }
+
   async downloadManga() {
     if (!this.currentUrl) {
       alert('Please enter or paste a URL first');
       return;
     }
 
+    if (this.activeDownloads.size >= this.maxConcurrentDownloads) {
+      alert(`Maximum ${this.maxConcurrentDownloads} concurrent downloads allowed`);
+      return;
+    }
+
     try {
+      const downloadId = Date.now();
       this.isDownloading = true;
+      this.activeDownloads.set(downloadId, { url: this.currentUrl, status: 'downloading' });
+      
+      // Add to history
+      this.addToDownloadHistory({
+        id: downloadId,
+        title: `${this.activeModule} - ${new URL(this.currentUrl).pathname}`,
+        url: this.currentUrl,
+        status: 'downloading',
+        progress: 0
+      });
+      
       this.updateUI();
+      
       const result = await window.electronAPI.downloadManga(
         this.activeModule,
         this.currentUrl,
-        { adultMode: this.adultMode }
+        { 
+          adultMode: this.adultMode,
+          downloadPath: this.downloadPath
+        }
       );
+      
       if (result.success) {
-        alert(`Download started successfully from ${this.activeModule}`);
+        this.updateDownloadProgress(downloadId, 100, 'complete');
+        alert(`Download completed successfully from ${this.activeModule}`);
       } else {
+        this.updateDownloadProgress(downloadId, 0, 'error');
         alert(`Download failed: ${result.error}`);
       }
     } catch (error) {
       console.error('Download error:', error);
       alert(`Download failed: ${error.message || 'Unknown error'}`);
     } finally {
-      this.isDownloading = false;
+      this.activeDownloads.delete(downloadId);
+      if (this.activeDownloads.size === 0) {
+        this.isDownloading = false;
+      }
       this.updateUI();
     }
   }
-  
-  cancelDownload() {
-        this.lastCustomUrl = ''; // Added property to store last custom URL
-    if (confirm('Abort current download?')) {
+
+  async downloadVideo(quality = '1080p') {
+    if (!this.currentUrl) {
+      alert('Please enter or paste a URL first');
+      return;
+    }
+
+    try {
+      const downloadId = Date.now();
+      this.videoDownloading = true;
+      this.videoProgress = 0;
+      
+      // Add to history
+      this.addToDownloadHistory({
+        id: downloadId,
+        title: `Video - ${quality}`,
+        url: this.currentUrl,
+        status: 'downloading',
+        progress: 0
+      });
+      
+      this.updateUI();
+
+      // Setup progress listeners
+      window.electronAPI.onVideoProgress((event, progress) => {
+        this.videoProgress = progress.percent || 0;
+        this.updateDownloadProgress(downloadId, this.videoProgress, 'downloading');
+        this.updateUI();
+      });
+
+      window.electronAPI.onVideoEvent((event, data) => {
+        console.log('Video event:', data);
+      });
+
+      const result = await window.electronAPI.downloadVideo(this.currentUrl, { quality });
+      
+      if (result.success) {
+        this.updateDownloadProgress(downloadId, 100, 'complete');
+        alert('Video downloaded successfully!');
+      } else {
+        this.updateDownloadProgress(downloadId, 0, 'error');
+        alert(`Video download failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Video download error:', error);
+      alert(`Video download failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      this.videoDownloading = false;
+      this.videoProgress = 0;
+      window.electronAPI.removeVideoListeners();
+      this.updateUI();
+    }
+  }
+
+  cancelAllDownloads() {
+    if (confirm('Cancel all active downloads?')) {
+      this.activeDownloads.clear();
       this.isDownloading = false;
+      this.videoDownloading = false;
       this.downloadQueue = [];
       this.updateUI();
     }
   }
-  
-  toggleSidebar() {
-    this.sidebarCollapsed = !this.sidebarCollapsed;
-    this.updateUI();
-    // Send to main process to resize browser view
-    window.electronAPI.resizeBrowserView(!this.sidebarCollapsed);
-  }
-  
+
   navigateFromBrowserHeader() {
     const urlEdit = document.getElementById('url-edit');
     let url = urlEdit.value.trim();
+    
     if (!url) {
       url = 'about:blank';
     }
-    // Add trusted domains for social media
-    const socialDomains = [
-      'instagram.com', 'www.instagram.com',
-      'facebook.com', 'www.facebook.com',
-      'twitter.com', 'x.com', 'www.twitter.com', 'www.x.com'
-    ];
-    socialDomains.forEach(domain => {
-      window.electronAPI.addTrustedDomain(domain);
-    });
+
     // Smart protocol handling
     if (url === 'about:blank' || isValidUrl(url)) {
       window.electronAPI.openBrowser(url);
-      // Update currentUrl to keep UI in sync
       this.currentUrl = url;
       this.updateUI();
     } else {
@@ -389,7 +649,7 @@ class MangaDownloader {
       }
     }
   }
-  
+
   updateUI() {
     // Update active module display
     document.getElementById('active-module-name').textContent = this.activeModule;
@@ -402,13 +662,13 @@ class MangaDownloader {
     browserToggle.classList.toggle('active', this.browserEnabled);
     adultToggle.classList.toggle('active', this.adultMode);
     adblockToggle.classList.toggle('active', this.adBlockEnabled);
-    
 
     // Update download button
     const downloadBtn = document.getElementById('download-btn');
     downloadBtn.disabled = !this.currentUrl;
-    if (this.isDownloading) {
-      downloadBtn.innerHTML = `<i class="fas fa-stop-circle"></i> Cancel Download`;
+    
+    if (this.isDownloading || this.activeDownloads.size > 0) {
+      downloadBtn.innerHTML = `<i class="fas fa-stop-circle"></i> Cancel Downloads (${this.activeDownloads.size})`;
     } else {
       downloadBtn.innerHTML = `<i class="fas fa-download"></i> Download`;
     }
@@ -418,52 +678,22 @@ class MangaDownloader {
     if (videoBtn) {
       videoBtn.disabled = !this.currentUrl || this.videoDownloading;
       videoBtn.innerHTML = this.videoDownloading ? 
-        `<i class="fas fa-sync fa-spin"></i> Downloading...` : 
+        `<i class="fas fa-sync fa-spin"></i> Downloading... ${Math.round(this.videoProgress)}%` : 
         `<i class="fas fa-video"></i> Download Video`;
     }
 
-    // Video progress
-    const videoProgressElem = document.getElementById('video-progress');
-    if (videoProgressElem) {
-      videoProgressElem.textContent = `${Math.round(this.videoProgress)}%`;
-    }
-
-    // Add progress bar to UI
-    let progressContainer = document.querySelector('.progress-container');
-    if (!progressContainer) {
-      progressContainer = document.createElement('div');
-      progressContainer.className = 'progress-container';
-      const progressBar = document.createElement('div');
-      progressBar.className = 'progress-bar';
-      progressBar.id = 'video-progress-bar';
-      progressContainer.appendChild(progressBar);
-      const statusInfo = document.querySelector('.status-info');
-      if (statusInfo) statusInfo.appendChild(progressContainer);
-    }
-    const progressBarElem = document.getElementById('video-progress-bar');
-    if (progressBarElem) {
-      progressBarElem.style.width = `${this.videoProgress}%`;
-    }
-
-    // Explicitly enable/disable URL input field
+    // Update URL input
     const urlInput = document.getElementById('url-input');
-    if (urlInput) {
-      urlInput.disabled = false;
+    if (urlInput && urlInput.value !== this.currentUrl) {
+      urlInput.value = this.currentUrl;
     }
-    
+
     // Update status
     const filteredModules = this.getFilteredModules();
     document.getElementById('module-count').textContent = `${filteredModules.length} loaded`;
     document.getElementById('mode-display').textContent = this.adultMode ? 'Adult' : 'Regular';
-    
-    // Update module buttons
-    document.querySelectorAll('.module-button').forEach(btn => {
-      btn.classList.remove('active');
-      if (btn.title === this.activeModule) {
-        btn.classList.add('active');
-      }
-    });
-    
+    document.getElementById('video-progress').textContent = `${Math.round(this.videoProgress)}%`;
+
     // Browser visibility
     const placeholder = document.getElementById('browser-placeholder');
     if (this.browserEnabled) {
@@ -471,20 +701,16 @@ class MangaDownloader {
     } else {
       placeholder.style.display = 'flex';
     }
-    // Update URL input field
-    if (urlInput) {
-      urlInput.value = this.currentUrl;
-    }
-    const sidebar = document.querySelector('.sidebar-right');
-    const mainContent = document.querySelector('.main-content');
-    const expandBtn = document.getElementById('expand-sidebar-btn');
-    sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
-    mainContent.classList.toggle('expanded', this.sidebarCollapsed);
-    expandBtn.style.display = this.sidebarCollapsed ? 'block' : 'none';
+
+    // Update download path display
+    this.updateDownloadPathDisplay();
   }
 }
 
+// Global reference for modal callbacks
+let app;
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  new MangaDownloader();
+  app = new MangaDownloader();
 });

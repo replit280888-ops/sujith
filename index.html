@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,76 +11,82 @@
 <body>
     <div id="app">
         <div class="sidebar-left">
-            <div class="modules-header">Modules</div>
+            <div class="logo">MD</div>
             <div id="module-buttons">
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=nhentai.net" alt="nhentai logo"> nhentai
+                <button class="module-button" data-module="colamanga" style="background-color: #FF6B6B;">
+                    <span>CO</span>
                 </button>
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=hitomi.la" alt="hitomi logo"> hitomi
+                <button class="module-button" data-module="asura" style="background-color: #4ECDC4;">
+                    <span>AS</span>
                 </button>
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=asuratoon.com" alt="asura logo"> asura
+                <button class="module-button" data-module="erosscan" style="background-color: #45B7D1;">
+                    <span>ER</span>
                 </button>
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=colamanga.com" alt="colamanga logo"> colamanga
+                <button class="module-button" data-module="mangadex" style="background-color: #DDA0DD;">
+                    <span>MA</span>
                 </button>
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=erossan.com" alt="erosscan logo"> erosscan
+                <button class="module-button" data-module="nhentai" style="background-color: #96CEB4;">
+                    <span>NH</span>
                 </button>
-                <button class="module-button">
-                    <img class="module-logo" src="https://www.google.com/s2/favicons?sz=64&domain_url=hentai2read.com" alt="hentai2read logo"> hentai2read
+                <button class="module-button" data-module="hentai2read" style="background-color: #FFEAA7;">
+                    <span>H2R</span>
+                </button>
+                <button class="module-button" data-module="hitomi" style="background-color: #98D8C8;">
+                    <span>HI</span>
                 </button>
             </div>
-            <button id="blank-browser-btn" class="module-button" style="margin-top:16px;width:40px;height:40px;background:#888;color:#fff;border-radius:50%;border:none;cursor:pointer;display:block;">Blank</button>
+            <button id="blank-browser-btn" class="module-button blank-btn">
+                <span>Blank</span>
+            </button>
+            <button id="settings-btn" class="settings-btn">
+                <i class="fas fa-cog"></i>
+            </button>
         </div>
         
         <div class="main-content">
             <div class="browser-header">
-                <button id="close-button" style="margin-left: 10px;">
-                  <i class="fas fa-times"></i> Close
-                </button>
                 <div class="browser-controls">
-  <div class="traffic-lights">
-    <div class="light red" id="close-browser"></div>
-    <div class="light yellow" id="minimize-browser"></div>
-    <div class="light green" id="maximize-browser"></div>
-  </div>
-  <div class="nav-controls">
-    <button id="browser-back" title="Back"><i class="fas fa-arrow-left"></i></button>
-    <button id="browser-forward" title="Forward"><i class="fas fa-arrow-right"></i></button>
-    <button id="browser-refresh" title="Refresh"><i class="fas fa-sync-alt"></i></button>
-  </div>
-  <div class="url-bar">
-    <input type="text" id="url-edit" value="about:blank" spellcheck="false" placeholder="Enter URL..." title="URL input">
-    <button id="go-btn">Go</button>
-  </div>
-</div>
+                    <div class="nav-controls">
+                        <button id="browser-back" title="Back"><i class="fas fa-arrow-left"></i></button>
+                        <button id="browser-forward" title="Forward"><i class="fas fa-arrow-right"></i></button>
+                        <button id="browser-refresh" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+                    <div class="url-bar">
+                        <input type="text" id="url-edit" value="about:blank" spellcheck="false" placeholder="Enter URL...">
+                    </div>
+                    <div class="header-actions">
+                        <button id="go-btn" class="go-btn">Go</button>
+                        <button id="close-browser" class="close-btn" title="Close Browser">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button id="download-history-btn" class="history-btn" title="Download History">
+                            <i class="fas fa-history"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="browser-content" id="browser-content">
-                <!-- We'll show a placeholder only when browser is not visible -->
                 <div class="browser-placeholder" id="browser-placeholder">
                     <i class="fas fa-globe"></i>
-                    <p>Select a module to load website</p>
+                    <p>Browser View</p>
+                    <span>Enter a URL to start browsing</span>
                 </div>
             </div>
         </div>
         
         <div class="sidebar-right">
-            <div class="controls-header">
-                <div>Controls</div>
-                <button id="sidebar-toggle" class="hamburger-btn" title="Toggle sidebar">
-                    <i class="fas fa-bars"></i>
-                </button>
+            <div class="controls-header">Controls</div>
+            
+            <div class="active-module-section">
+                <div class="module-indicator">
+                    <div class="module-dot" id="active-module-dot"></div>
+                    <span id="active-module-name">Colamanga</span>
+                </div>
             </div>
             
-            <div class="active-module">
-                <div class="label">Active Module</div>
-                <div class="value" id="active-module-name">None</div>
-            </div>
-            
-            <div class="toggle-group">
+            <div class="toggle-section">
                 <div class="toggle-item">
+                    <i class="fas fa-globe"></i>
                     <span>Browser View</span>
                     <div class="toggle" id="browser-toggle">
                         <div class="toggle-slider"></div>
@@ -87,6 +94,7 @@
                 </div>
                 
                 <div class="toggle-item">
+                    <i class="fas fa-eye"></i>
                     <span>Adult Mode</span>
                     <div class="toggle" id="adult-toggle">
                         <div class="toggle-slider"></div>
@@ -94,6 +102,7 @@
                 </div>
                 
                 <div class="toggle-item">
+                    <i class="fas fa-shield-alt"></i>
                     <span>Ad Blocker</span>
                     <div class="toggle" id="adblock-toggle">
                         <div class="toggle-slider"></div>
@@ -101,48 +110,194 @@
                 </div>
             </div>
             
+            <div class="download-path-section">
+                <div class="label">Download Path</div>
+                <div class="path-display" id="download-path-display">
+                    <i class="fas fa-folder"></i>
+                    <span>/Users/Downloads</span>
+                    <button id="change-path-btn" title="Change Path">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </div>
+            
             <div class="url-input-section">
                 <div class="label">URL Input</div>
                 <div class="input-group">
-                    <input type="text" id="url-input" placeholder="Enter or paste URL..." autocomplete="off">
-                    <button id="paste-btn" title="Paste URL from browser">
+                    <input type="text" id="url-input" placeholder="www.example.com/manga/chapter-1">
+                    <button id="paste-btn" title="Paste URL">
                         <i class="fas fa-paste"></i>
                     </button>
                 </div>
             </div>
             
-            <button id="download-btn" class="download-button" disabled>
-                <i class="fas fa-download"></i>
-                Download
-            </button>
-            <button id="download-video-btn" class="download-button">
-                <i class="fas fa-video"></i> Download Video
-            </button>
+            <div class="download-buttons">
+                <button id="download-btn" class="download-button primary">
+                    <i class="fas fa-download"></i>
+                    Download
+                </button>
+                <button id="download-video-btn" class="download-button secondary">
+                    <i class="fas fa-video"></i>
+                    Download Video
+                </button>
+            </div>
             
-            <div class="status-info">
+            <div class="status-section">
                 <div class="status-item">
                     <span>Status:</span>
-                    <span class="status-ready">Ready</span>
+                    <span class="status-value ready">Ready</span>
                 </div>
                 <div class="status-item">
                     <span>Modules:</span>
-                    <span id="module-count">0 loaded</span>
+                    <span class="status-value" id="module-count">4 loaded</span>
                 </div>
                 <div class="status-item">
                     <span>Mode:</span>
-                    <span id="mode-display">Regular</span>
+                    <span class="status-value" id="mode-display">Regular</span>
                 </div>
                 <div class="status-item">
                     <span>Video Progress:</span>
-                    <span id="video-progress">0%</span>
+                    <span class="status-value" id="video-progress">0%</span>
                 </div>
             </div>
         </div>
     </div>
     
-    <button id="expand-sidebar-btn" class="expand-btn" title="Expand sidebar">
-        <i class="fas fa-bars"></i>
-    </button>
+    <!-- Download History Modal -->
+    <div id="download-history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Download History</h3>
+                <button id="close-history-modal" class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="download-list" class="download-list">
+                    <!-- Download items will be populated here -->
+                </div>
+                <div class="modal-actions">
+                    <button id="clear-completed-btn" class="btn-secondary">Clear Completed</button>
+                    <button id="clear-all-btn" class="btn-danger">Clear All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Video Quality Modal -->
+    <div id="video-quality-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Video Quality</h3>
+                <button id="close-quality-modal" class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose the video quality for your download. Higher quality videos are larger in size but offer better viewing experience.</p>
+                <div class="quality-options">
+                    <div class="quality-option selected" data-quality="1080p">
+                        <div class="quality-info">
+                            <span class="quality-name">1080p Full HD</span>
+                            <span class="quality-bitrate">8 Mbps</span>
+                        </div>
+                        <span class="quality-size">~800MB</span>
+                    </div>
+                    <div class="quality-option" data-quality="4k">
+                        <div class="quality-info">
+                            <span class="quality-name">4K Ultra HD</span>
+                            <span class="quality-bitrate">25 Mbps</span>
+                        </div>
+                        <span class="quality-size">~1.2GB</span>
+                    </div>
+                    <div class="quality-option" data-quality="720p">
+                        <div class="quality-info">
+                            <span class="quality-name">720p HD</span>
+                            <span class="quality-bitrate">5 Mbps</span>
+                        </div>
+                        <span class="quality-size">~450MB</span>
+                    </div>
+                    <div class="quality-option" data-quality="480p">
+                        <div class="quality-info">
+                            <span class="quality-name">480p SD</span>
+                            <span class="quality-bitrate">2.5 Mbps</span>
+                        </div>
+                        <span class="quality-size">~280MB</span>
+                    </div>
+                    <div class="quality-option" data-quality="360p">
+                        <div class="quality-info">
+                            <span class="quality-name">360p Low</span>
+                            <span class="quality-bitrate">1 Mbps</span>
+                        </div>
+                        <span class="quality-size">~150MB</span>
+                    </div>
+                </div>
+                <button id="start-video-download-btn" class="download-button primary">
+                    <i class="fas fa-play"></i>
+                    Start Video Download
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Download Path Modal -->
+    <div id="download-path-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Download Path</h3>
+                <button id="close-path-modal" class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose where you want to save your downloaded files.</p>
+                <div class="path-options">
+                    <div class="path-option selected">
+                        <i class="fas fa-download"></i>
+                        <div class="path-info">
+                            <span class="path-name">Downloads</span>
+                            <span class="path-location">/Users/Downloads</span>
+                        </div>
+                    </div>
+                    <div class="path-option">
+                        <i class="fas fa-desktop"></i>
+                        <div class="path-info">
+                            <span class="path-name">Desktop</span>
+                            <span class="path-location">/Users/Desktop</span>
+                        </div>
+                    </div>
+                    <div class="path-option">
+                        <i class="fas fa-file-alt"></i>
+                        <div class="path-info">
+                            <span class="path-name">Documents</span>
+                            <span class="path-location">/Users/Documents</span>
+                        </div>
+                    </div>
+                    <div class="path-option">
+                        <i class="fas fa-video"></i>
+                        <div class="path-info">
+                            <span class="path-name">Videos</span>
+                            <span class="path-location">/Users/Videos</span>
+                        </div>
+                    </div>
+                    <div class="path-option custom-path">
+                        <i class="fas fa-folder"></i>
+                        <div class="path-info">
+                            <span class="path-name">Custom Path</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="custom-path-input" style="display: none;">
+                    <div class="label">Custom Path</div>
+                    <input type="text" id="custom-path-input" placeholder="/custom/download/path">
+                </div>
+                <div class="modal-actions">
+                    <button id="cancel-path-btn" class="btn-secondary">Cancel</button>
+                    <button id="select-path-btn" class="btn-primary">Select Path</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script src="renderer.js"></script>
 </body>

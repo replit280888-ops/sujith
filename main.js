@@ -1,9 +1,9 @@
-// Bypass certificate errors for all sites
-// Bypass certificate errors for all sites
+
 const { app, BrowserWindow, BrowserView, ipcMain, dialog, shell, session } = require('electron');
 const YtDlpWrap = require('yt-dlp-wrap').default;
 const fs = require('fs');
 const path = require('path');
+
 const ALLOWLIST = [
   'youtube.com', 'www.youtube.com', 'youtu.be', '*.googlevideo.com',
   'instagram.com', '*.instagram.com',
@@ -11,12 +11,118 @@ const ALLOWLIST = [
   'twitter.com', 'x.com', '*.twitter.com', '*.x.com',
   '*.google.com'
 ];
-// Place all ipcMain.handle calls after requires
-ipcMain.handle('get-adblock-enabled', () => adBlockEnabled);
 
 const { ElectronBlocker } = require('@cliqz/adblocker-electron');
-// yt-dlp binary path
+
+// Global variables
+let mainWindow;
+let browserView = null;
+let isBrowserVisible = true;
+let blocker = null;
+let adBlockEnabled = true;
 let ytDlpPath;
+let activeDownloads = new Map();
+let downloadQueue = [];
+let maxConcurrentDownloads = 3;
+
+// Download management
+class DownloadManager {
+  constructor() {
+    this.activeDownloads = new Map();
+    this.downloadQueue = [];
+    this.maxConcurrent = 3;
+  }
+
+  async addDownload(downloadInfo) {
+    if (this.activeDownloads.size >= this.maxConcurrent) {
+      this.downloadQueue.push(downloadInfo);
+      return { queued: true, position: this.downloadQueue.length };
+    }
+
+    return this.startDownload(downloadInfo);
+  }
+
+  async startDownload(downloadInfo) {
+    const downloadId = Date.now() + Math.random();
+    this.activeDownloads.set(downloadId, downloadInfo);
+
+    try {
+      const result = await this.executeDownload(downloadInfo, downloadId);
+      this.activeDownloads.delete(downloadId);
+      this.processQueue();
+      return { success: true, result, downloadId };
+    } catch (error) {
+      this.activeDownloads.delete(downloadId);
+      this.processQueue();
+      return { success: false, error: error.message, downloadId };
+    }
+  }
+
+  async executeDownload(downloadInfo, downloadId) {
+    const { module, url, options } = downloadInfo;
+    
+    // Send progress updates
+    mainWindow?.webContents.send('download-progress', {
+      downloadId,
+      status: 'starting',
+      progress: 0
+    });
+
+    try {
+      const downloaderModule = require(`./modules/${module.toLowerCase()}.js`);
+      const result = await downloaderModule.download({ url, ...options });
+      
+      mainWindow?.webContents.send('download-progress', {
+        downloadId,
+        status: 'complete',
+        progress: 100
+      });
+
+      return result;
+    } catch (error) {
+      mainWindow?.webContents.send('download-progress', {
+        downloadId,
+        status: 'error',
+        progress: 0,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  processQueue() {
+    if (this.downloadQueue.length > 0 && this.activeDownloads.size < this.maxConcurrent) {
+      const nextDownload = this.downloadQueue.shift();
+      this.startDownload(nextDownload);
+    }
+  }
+
+  cancelDownload(downloadId) {
+    if (this.activeDownloads.has(downloadId)) {
+      this.activeDownloads.delete(downloadId);
+      mainWindow?.webContents.send('download-progress', {
+        downloadId,
+        status: 'cancelled',
+        progress: 0
+      });
+      this.processQueue();
+      return true;
+    }
+    return false;
+  }
+
+  getActiveDownloads() {
+    return Array.from(this.activeDownloads.keys());
+  }
+
+  getQueueLength() {
+    return this.downloadQueue.length;
+  }
+}
+
+const downloadManager = new DownloadManager();
+
+// Initialize yt-dlp
 app.whenReady().then(() => {
   ytDlpPath = path.join(app.getPath('userData'), 'yt-dlp');
   if (process.platform === 'win32') {
@@ -24,7 +130,6 @@ app.whenReady().then(() => {
   }
 });
 
-// Ensure yt-dlp binary exists
 async function ensureYtDlpBinary() {
   if (!fs.existsSync(ytDlpPath)) {
     console.log('Downloading yt-dlp binary...');
@@ -32,45 +137,7 @@ async function ensureYtDlpBinary() {
     console.log('yt-dlp binary downloaded to', ytDlpPath);
   }
 }
-// IPC handler for video download
-ipcMain.handle('download-video', async (event, url) => {
-  try {
-    await ensureYtDlpBinary();
-    const ytDlp = new YtDlpWrap(ytDlpPath);
-    const downloadPath = path.join(app.getPath('downloads'), 'videos');
-    if (!fs.existsSync(downloadPath)) {
-      fs.mkdirSync(downloadPath, { recursive: true });
-    }
-    return new Promise((resolve, reject) => {
-      ytDlp.exec([
-        url,
-        '-o', path.join(downloadPath, '%(title)s.%(ext)s'),
-        '--format', 'bestvideo+bestaudio/best',
-        '--merge-output-format', 'mp4'
-      ])
-      .on('progress', (progress) => {
-        if (mainWindow && mainWindow.webContents)
-          mainWindow.webContents.send('video-progress', progress);
-      })
-      .on('ytDlpEvent', (eventType, eventData) => {
-        if (mainWindow && mainWindow.webContents)
-          mainWindow.webContents.send('video-event', { eventType, eventData });
-      })
-      .on('error', (error) => reject(error))
-      .on('close', () => resolve({ success: true }));
-    });
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
 
-let mainWindow;
-let browserView = null;
-let isBrowserVisible = true; // Track visibility state
-const trustedDomains = new Set();
-
-let blocker = null;
-let adBlockEnabled = true;
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -103,56 +170,39 @@ function createWindow() {
       browserView = null;
     }
   });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-  // Add this to prevent race conditions
-  app.on('before-quit', () => {
-    if (browserView) {
-      browserView.webContents.destroy();
-      browserView = null;
-    }
-  });
 
-  // Improved resize handler for better fit
+  // Resize handler
   let resizeTimeout;
   mainWindow.on('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
       if (browserView && isBrowserVisible) {
-        // Always use up-to-date window size and sidebar state
         const [width, height] = mainWindow.getContentSize();
-        const rightSidebarWidth = (typeof sidebarVisible !== 'undefined' ? sidebarVisible : true) ? 320 : 0;
+        const rightSidebarWidth = 300;
         browserView.setBounds({
-          x: 64, // sidebar-left width
-          y: 48, // header height
-          width: width - 64 - rightSidebarWidth,
+          x: 60,
+          y: 48,
+          width: width - 60 - rightSidebarWidth,
           height: height - 48
         });
       }
     }, 100);
   });
-
-  // Fullscreen toggle on F12
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.key === 'F12') {
-      const isFull = mainWindow.isFullScreen();
-      mainWindow.setFullScreen(!isFull);
-      event.preventDefault();
-    }
-  });
 }
-
 
 function createBrowserView(url) {
   if (!mainWindow) return;
-  // Prevent multiple views
+  
   if (browserView && !browserView.webContents.isDestroyed()) {
     mainWindow.removeBrowserView(browserView);
     browserView.webContents.destroy();
   }
   browserView = null;
-  // Create new BrowserView
+
   browserView = new BrowserView({
     webPreferences: {
       nodeIntegration: false,
@@ -161,40 +211,27 @@ function createBrowserView(url) {
       allowRunningInsecureContent: true
     }
   });
+
   mainWindow.addBrowserView(browserView);
   browserView.webContents.setUserAgent(
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
   );
-  // Add event listeners
+
   browserView.webContents.on('did-finish-load', () => {
     const currentUrl = browserView.webContents.getURL();
     mainWindow.webContents.send('browser-url-changed', currentUrl);
-    // Inject CSS to hide YouTube's bottom right subscribe button/white box
-    if (currentUrl.includes('youtube.com')) {
-      browserView.webContents.insertCSS(`
-        ytd-button-renderer.style-scope.ytd-subscribe-button-renderer,
-        ytd-subscribe-button-renderer.style-scope.ytd-video-secondary-info-renderer,
-        #subscribe-button,
-        ytd-mealbar-promo-renderer,
-        ytd-mealbar-promo-renderer[slot="bottom-row"] {
-          display: none !important;
-        }
-        .ytp-ce-element, .ytp-ce-bottom-right-cta, .ytp-ce-element.ytp-ce-bottom-right-cta {
-          display: none !important;
-        }
-      `);
-    }
   });
+
   browserView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error(`Failed to load ${url}: ${errorDescription} (${errorCode})`);
   });
-  // Enable adblocking only if enabled
+
   if (blocker && adBlockEnabled) {
     blocker.enableBlockingInSession(browserView.webContents.session, { allowlist: ALLOWLIST });
   }
-  // Position the BrowserView
-  resizeBrowserView(typeof sidebarVisible !== 'undefined' ? sidebarVisible : true);
-  // Load the URL
+
+  resizeBrowserView();
+
   try {
     browserView.webContents.loadURL(url);
     browserView.webContents.focus();
@@ -203,35 +240,15 @@ function createBrowserView(url) {
   }
 }
 
-function toggleBrowserView(visible) {
-  isBrowserVisible = visible;
-  if (browserView) {
-    if (visible) {
-      // Show and position browser
-      const [width, height] = mainWindow.getSize();
-      browserView.setBounds({ 
-        x: 60, 
-        y: 60, 
-        width: width - 410, 
-        height: height - 100 
-      });
-      browserView.webContents.focus();
-    } else {
-      // Hide browser by moving it off-screen
-      browserView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-    }
-  }
-}
-
-function resizeBrowserView(showSidebar) {
+function resizeBrowserView() {
   if (!browserView || !mainWindow) return;
   const [width, height] = mainWindow.getContentSize();
-  const rightSidebarWidth = showSidebar ? 320 : 0;
-  // Ensure we don't set negative dimensions
-  const viewWidth = Math.max(100, width - 64 - rightSidebarWidth);
+  const rightSidebarWidth = 300;
+  const viewWidth = Math.max(100, width - 60 - rightSidebarWidth);
   const viewHeight = Math.max(100, height - 48);
+  
   browserView.setBounds({ 
-    x: 64, 
+    x: 60, 
     y: 48, 
     width: viewWidth, 
     height: viewHeight 
@@ -258,7 +275,6 @@ app.whenReady().then(async () => {
     blocker = null;
   }
   createWindow();
-  // Remove adblocker enable here; handled in set-adblock-enabled
 });
 
 app.on('window-all-closed', () => {
@@ -273,16 +289,40 @@ app.on('activate', () => {
   }
 });
 
+app.on('before-quit', () => {
+  if (browserView) {
+    browserView.webContents.destroy();
+    browserView = null;
+  }
+});
+
+// Certificate error handling
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  event.preventDefault();
+  callback(true);
+});
+
+app.on('select-client-certificate', (event, webContents, url, list, callback) => {
+  event.preventDefault();
+  if (list.length > 0) {
+    callback(list[0]);
+  }
+});
+
 // IPC Handlers
+ipcMain.handle('get-adblock-enabled', () => adBlockEnabled);
 
 ipcMain.handle('open-browser', async (event, url) => {
   createBrowserView(url);
-  toggleBrowserView(true);
+  isBrowserVisible = true;
   return true;
 });
 
 ipcMain.handle('close-browser', async () => {
-  toggleBrowserView(false);
+  isBrowserVisible = false;
+  if (browserView) {
+    browserView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  }
   return true;
 });
 
@@ -293,80 +333,9 @@ ipcMain.handle('get-browser-url', async () => {
   return null;
 });
 
-// Add IPC handler for navigation
 ipcMain.handle('navigate-to', async (event, url) => {
   if (browserView) {
     browserView.webContents.loadURL(url);
-  }
-});
-
-ipcMain.handle('download-manga', async (event, { module, url, options }) => {
-  // Debug log for module and URL
-  console.log('[Main] Download request received:', { module, url, options });
-  try {
-    const downloaderModule = require(`./modules/${module.toLowerCase()}.js`);
-    // Always pass an object with url and options spread in
-    const result = await downloaderModule.download({ url, ...options });
-    return { success: true, result };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('select-download-folder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory']
-  });
-  
-  if (!result.canceled) {
-    return result.filePaths[0];
-  }
-  return null;
-});
-
-ipcMain.handle('add-trusted-domain', (event, domain) => {
-  trustedDomains.add(domain);
-});
-
-ipcMain.handle('set-adblock-enabled', async (event, enabled) => {
-  adBlockEnabled = enabled;
-  if (blocker) {
-    // Update all existing sessions
-    const sessions = [
-      session.defaultSession,
-      ...BrowserWindow.getAllWindows().map(w => w.webContents.session)
-    ];
-    if (browserView && !sessions.includes(browserView.webContents.session)) {
-      sessions.push(browserView.webContents.session);
-    }
-    sessions.forEach(sess => {
-      if (enabled) {
-        blocker.enableBlockingInSession(sess, { allowlist: ALLOWLIST });
-      } else {
-        try {
-          blocker.disableBlockingInSession(sess);
-        } catch (err) {
-          // Always resolve true, ignore all errors for disabling
-        }
-      }
-    });
-    // Reload active browser view
-    if (browserView && !browserView.webContents.isDestroyed()) {
-      browserView.webContents.reload();
-    }
-  }
-  return true;
-});
-
-app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-  event.preventDefault();
-  callback(true);
-});
-// Global error handler for SSL client certificates
-app.on('select-client-certificate', (event, webContents, url, list, callback) => {
-  event.preventDefault();
-  if (list.length > 0) {
-    callback(list[0]); // Always select the first certificate
   }
 });
 
@@ -390,16 +359,117 @@ ipcMain.handle('navigate-browser', async (event, action) => {
   }
 });
 
-ipcMain.handle('resize-browser-view', async (event, showSidebar) => {
-  if (!browserView) return;
-  const [width, height] = mainWindow.getSize();
-  const rightSidebarWidth = showSidebar ? 350 : 0;
-  browserView.setBounds({ 
-    x: 60, 
-    y: 60, 
-    width: width - 60 - rightSidebarWidth, 
-    height: height - 100 
+ipcMain.handle('download-manga', async (event, { module, url, options }) => {
+  console.log('[Main] Download request received:', { module, url, options });
+  
+  const downloadInfo = { module, url, options };
+  const result = await downloadManager.addDownload(downloadInfo);
+  
+  return result;
+});
+
+ipcMain.handle('cancel-download', async (event, downloadId) => {
+  return downloadManager.cancelDownload(downloadId);
+});
+
+ipcMain.handle('get-download-status', async () => {
+  return {
+    active: downloadManager.getActiveDownloads().length,
+    queued: downloadManager.getQueueLength()
+  };
+});
+
+ipcMain.handle('download-video', async (event, url, options = {}) => {
+  try {
+    await ensureYtDlpBinary();
+    const ytDlp = new YtDlpWrap(ytDlpPath);
+    const downloadPath = path.join(app.getPath('downloads'), 'videos');
+    
+    if (!fs.existsSync(downloadPath)) {
+      fs.mkdirSync(downloadPath, { recursive: true });
+    }
+
+    const formatSelector = options.quality === '4k' ? 'bestvideo[height<=2160]+bestaudio/best[height<=2160]' :
+                          options.quality === '1080p' ? 'bestvideo[height<=1080]+bestaudio/best[height<=1080]' :
+                          options.quality === '720p' ? 'bestvideo[height<=720]+bestaudio/best[height<=720]' :
+                          options.quality === '480p' ? 'bestvideo[height<=480]+bestaudio/best[height<=480]' :
+                          options.quality === '360p' ? 'bestvideo[height<=360]+bestaudio/best[height<=360]' :
+                          'bestvideo+bestaudio/best';
+
+    return new Promise((resolve, reject) => {
+      ytDlp.exec([
+        url,
+        '-o', path.join(downloadPath, '%(title)s.%(ext)s'),
+        '--format', formatSelector,
+        '--merge-output-format', 'mp4'
+      ])
+      .on('progress', (progress) => {
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('video-progress', progress);
+        }
+      })
+      .on('ytDlpEvent', (eventType, eventData) => {
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('video-event', { eventType, eventData });
+        }
+      })
+      .on('error', (error) => reject(error))
+      .on('close', () => resolve({ success: true }));
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('select-download-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
   });
+  
+  if (!result.canceled) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('add-trusted-domain', (event, domain) => {
+  // Add domain to trusted list if needed
+  console.log('Added trusted domain:', domain);
+});
+
+ipcMain.handle('set-adblock-enabled', async (event, enabled) => {
+  adBlockEnabled = enabled;
+  if (blocker) {
+    const sessions = [
+      session.defaultSession,
+      ...BrowserWindow.getAllWindows().map(w => w.webContents.session)
+    ];
+    
+    if (browserView && !sessions.includes(browserView.webContents.session)) {
+      sessions.push(browserView.webContents.session);
+    }
+    
+    sessions.forEach(sess => {
+      if (enabled) {
+        blocker.enableBlockingInSession(sess, { allowlist: ALLOWLIST });
+      } else {
+        try {
+          blocker.disableBlockingInSession(sess);
+        } catch (err) {
+          // Ignore errors when disabling
+        }
+      }
+    });
+    
+    if (browserView && !browserView.webContents.isDestroyed()) {
+      browserView.webContents.reload();
+    }
+  }
+  return true;
+});
+
+ipcMain.handle('resize-browser-view', async (event, showSidebar) => {
+  resizeBrowserView();
 });
 
 ipcMain.on('window-close', () => {
