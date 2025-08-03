@@ -147,6 +147,8 @@ class MangaDownloader {
   }
 
   setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
     // Hamburger menu toggle
     const hamburgerToggle = document.getElementById('hamburger-toggle');
     const sidebarLeft = document.querySelector('.sidebar-left');
@@ -225,31 +227,50 @@ class MangaDownloader {
     });
 
     // Navigation controls
-    document.getElementById('browser-back').onclick = () => {
-      window.electronAPI.navigateBrowser('back');
-    };
+    const backBtn = document.getElementById('browser-back');
+    const forwardBtn = document.getElementById('browser-forward');
+    const refreshBtn = document.getElementById('browser-refresh');
     
-    document.getElementById('browser-forward').onclick = () => {
-      window.electronAPI.navigateBrowser('forward');
-    };
+    if (backBtn) {
+      backBtn.onclick = () => {
+        console.log('Back button clicked');
+        window.electronAPI.navigateBrowser('back');
+      };
+    }
     
-    document.getElementById('browser-refresh').onclick = () => {
-      window.electronAPI.navigateBrowser('refresh');
-    };
+    if (forwardBtn) {
+      forwardBtn.onclick = () => {
+        console.log('Forward button clicked');
+        window.electronAPI.navigateBrowser('forward');
+      };
+    }
+    
+    if (refreshBtn) {
+      refreshBtn.onclick = () => {
+        console.log('Refresh button clicked');
+        window.electronAPI.navigateBrowser('refresh');
+      };
+    }
 
     // URL navigation
     const urlEdit = document.getElementById('url-edit');
     const goBtn = document.getElementById('go-btn');
     
-    urlEdit.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this.navigateFromBrowserHeader();
-      }
-    });
+    if (urlEdit) {
+      urlEdit.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          console.log('Enter pressed in URL bar');
+          this.navigateFromBrowserHeader();
+        }
+      });
+    }
     
-    goBtn.addEventListener('click', () => {
-      this.navigateFromBrowserHeader();
-    });
+    if (goBtn) {
+      goBtn.addEventListener('click', () => {
+        console.log('Go button clicked');
+        this.navigateFromBrowserHeader();
+      });
+    }
 
     // Close browser
     const closeBrowserBtn = document.getElementById('close-browser');
@@ -262,29 +283,42 @@ class MangaDownloader {
     }
 
     // Download history button
-    document.getElementById('download-history-btn').onclick = () => {
-      this.showDownloadHistory();
-    };
+    const historyBtn = document.getElementById('download-history-btn');
+    if (historyBtn) {
+      historyBtn.onclick = () => {
+        console.log('Download history button clicked');
+        this.showDownloadHistory();
+      };
+    }
 
     // Toggles
-    document.getElementById('browser-toggle').onclick = () => {
-      this.browserEnabled = !this.browserEnabled;
-      this.updateUI();
-      if (this.browserEnabled) {
-        const activeModule = this.modules.find(m => m.name === this.activeModule);
-        if (activeModule) {
-          window.electronAPI.openBrowser(activeModule.url);
+    const browserToggle = document.getElementById('browser-toggle');
+    const adultToggle = document.getElementById('adult-toggle');
+    
+    if (browserToggle) {
+      browserToggle.onclick = () => {
+        console.log('Browser toggle clicked');
+        this.browserEnabled = !this.browserEnabled;
+        this.updateUI();
+        if (this.browserEnabled) {
+          const activeModule = this.modules.find(m => m.name === this.activeModule);
+          if (activeModule) {
+            window.electronAPI.openBrowser(activeModule.url);
+          }
+        } else {
+          window.electronAPI.closeBrowser();
         }
-      } else {
-        window.electronAPI.closeBrowser();
-      }
-    };
+      };
+    }
 
-    document.getElementById('adult-toggle').onclick = () => {
-      this.adultMode = !this.adultMode;
-      this.renderModuleButtons();
-      this.updateUI();
-    };
+    if (adultToggle) {
+      adultToggle.onclick = () => {
+        console.log('Adult mode toggle clicked');
+        this.adultMode = !this.adultMode;
+        this.renderModuleButtons();
+        this.updateUI();
+      };
+    }
 
     document.getElementById('adblock-toggle').onclick = async () => {
       const toggle = document.getElementById('adblock-toggle');
@@ -316,26 +350,40 @@ class MangaDownloader {
     };
 
     // Download path
-    document.getElementById('change-path-btn').onclick = () => {
-      this.showDownloadPathModal();
-    };
+    const changePathBtn = document.getElementById('change-path-btn');
+    if (changePathBtn) {
+      changePathBtn.onclick = () => {
+        console.log('Change path button clicked');
+        this.showDownloadPathModal();
+      };
+    }
 
     // URL input
     const urlInput = document.getElementById('url-input');
-    urlInput.oninput = (e) => {
-      this.currentUrl = e.target.value;
-      this.updateUI();
-    };
+    if (urlInput) {
+      urlInput.oninput = (e) => {
+        this.currentUrl = e.target.value;
+        this.updateUI();
+      };
+    }
 
     // Paste button
-    document.getElementById('paste-btn').onclick = async () => {
-      const url = await window.electronAPI.getBrowserUrl();
-      if (url) {
-        urlInput.value = url;
-        this.currentUrl = url;
-        this.updateUI();
-      }
-    };
+    const pasteBtn = document.getElementById('paste-btn');
+    if (pasteBtn) {
+      pasteBtn.onclick = async () => {
+        console.log('Paste button clicked');
+        try {
+          const url = await window.electronAPI.getBrowserUrl();
+          if (url && urlInput) {
+            urlInput.value = url;
+            this.currentUrl = url;
+            this.updateUI();
+          }
+        } catch (error) {
+          console.error('Error pasting URL:', error);
+        }
+      };
+    }
 
     // Download buttons
     const downloadBtn = document.getElementById('download-btn');
