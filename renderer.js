@@ -43,6 +43,7 @@ class MangaDownloader {
     this.renderModuleButtons();
     this.setupEventListeners();
     this.loadDownloadHistory();
+    this.initializeBrowserState();
     
     // Add cleanup on page unload
     window.addEventListener('beforeunload', () => this.cleanup());
@@ -57,16 +58,18 @@ class MangaDownloader {
       this._cachedElements = null;
     }
   }
-    
-    // Get initial ad block state
-    window.electronAPI.getGlobalAdblockState().then((enabled) => {
+
+  async initializeBrowserState() {
+    try {
+      // Get initial ad block state
+      const enabled = await window.electronAPI.getAdblockEnabled();
       this.adBlockEnabled = enabled;
       this.updateUI();
-    }).catch((error) => {
+    } catch (error) {
       console.error('Error getting ad block state:', error);
       this.adBlockEnabled = true;
       this.updateUI();
-    });
+    }
 
     // Listen for browser URL changes
     window.electronAPI.onBrowserUrlChanged((event, url) => {
@@ -151,25 +154,40 @@ class MangaDownloader {
     if (!mobileOverlay) {
       mobileOverlay = document.createElement('div');
       mobileOverlay.className = 'mobile-overlay';
+      mobileOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        display: none;
+      `;
       document.body.appendChild(mobileOverlay);
     }
     
     if (hamburgerToggle) {
-      hamburgerToggle.addEventListener('click', () => {
-        hamburgerToggle.classList.toggle('active');
-        sidebarLeft.classList.toggle('mobile-open');
-        sidebarRight.classList.toggle('mobile-open');
-        mobileOverlay.classList.toggle('active');
+      hamburgerToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isActive = hamburgerToggle.classList.contains('active');
+        
+        hamburgerToggle.classList.toggle('active', !isActive);
+        sidebarLeft.classList.toggle('mobile-open', !isActive);
+        sidebarRight.classList.toggle('mobile-open', !isActive);
+        mobileOverlay.style.display = isActive ? 'none' : 'block';
       });
     }
     
     // Close menu when clicking overlay
-    mobileOverlay.addEventListener('click', () => {
-      hamburgerToggle.classList.remove('active');
-      sidebarLeft.classList.remove('mobile-open');
-      sidebarRight.classList.remove('mobile-open');
-      mobileOverlay.classList.remove('active');
-    });
+    if (mobileOverlay) {
+      mobileOverlay.addEventListener('click', () => {
+        hamburgerToggle.classList.remove('active');
+        sidebarLeft.classList.remove('mobile-open');
+        sidebarRight.classList.remove('mobile-open');
+        mobileOverlay.style.display = 'none';
+      });
+    }
     
     // Close menu on window resize to desktop size
     window.addEventListener('resize', () => {
@@ -177,7 +195,7 @@ class MangaDownloader {
         hamburgerToggle.classList.remove('active');
         sidebarLeft.classList.remove('mobile-open');
         sidebarRight.classList.remove('mobile-open');
-        mobileOverlay.classList.remove('active');
+        if (mobileOverlay) mobileOverlay.style.display = 'none';
       }
     });
 

@@ -261,6 +261,14 @@ function createBrowserView(url) {
     mainWindow.webContents.send('browser-url-changed', currentUrl);
   });
 
+  browserView.webContents.on('did-navigate', (event, navigationUrl) => {
+    mainWindow.webContents.send('browser-url-changed', navigationUrl);
+  });
+
+  browserView.webContents.on('did-navigate-in-page', (event, navigationUrl) => {
+    mainWindow.webContents.send('browser-url-changed', navigationUrl);
+  });
+
   browserView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error(`Failed to load ${url}: ${errorDescription} (${errorCode})`);
   });
@@ -362,6 +370,7 @@ app.on('select-client-certificate', (event, webContents, url, list, callback) =>
 
 // IPC Handlers
 ipcMain.handle('get-adblock-enabled', () => adBlockEnabled);
+ipcMain.handle('getAdblockEnabled', () => adBlockEnabled);
 
 ipcMain.handle('open-browser', async (event, url) => {
   createBrowserView(url);

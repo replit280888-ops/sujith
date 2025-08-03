@@ -6,6 +6,15 @@ async function downloadColaManga({ url, startChapter = 1, endChapter = 1, title 
   if (!url || typeof url !== 'string') {
     throw new Error('No URL provided to ColaManga downloader. Received: ' + url);
   }
+
+  // Validate URL format
+  try {
+    new URL(url);
+  } catch (e) {
+    throw new Error('Invalid URL format provided to ColaManga downloader: ' + url);
+  }
+
+  console.log(`Starting ColaManga download from: ${url}`);
   const browser = await chromium.launch({ 
     headless: true,
     ignoreHTTPSErrors: true,
@@ -19,14 +28,30 @@ async function downloadColaManga({ url, startChapter = 1, endChapter = 1, title 
   const summary = [];
 
   for (let chapterNum = startChapter; chapterNum <= endChapter; chapterNum++) {
-    const urlNum = chapterNum + 1;
-    const chapterUrl = `${url}${urlNum}.html`;
+    let chapterUrl;
+
+    // Handle different URL formats
+    if (url.includes('/chapter-') || url.includes('/ch-')) {
+      // Replace chapter number in existing URL
+      chapterUrl = url.replace(/(\d+)(?!.*\d)/, chapterNum.toString());
+    } else {
+      // Append chapter number
+      const urlNum = chapterNum + 1;
+      chapterUrl = url.endsWith('/') ? `${url}${urlNum}.html` : `${url}/${urlNum}.html`;
+    }
+
     const chapterFolder = path.join(__dirname, '..', 'downloads', title, `chapter_${chapterNum}`);
     await fs.ensureDir(chapterFolder);
 
     console.log(`\n🌐 Opening: ${chapterUrl}`);
     try {
-      await page.goto(chapterUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.goto(chapterUrl, { 
+        waitUntil: 'networkidle', 
+        timeout: 30000 
+      });
+
+      // Wait for images to load
+      await page.waitForSelector('.mh_comicpic img', { timeout: 10000 });
     } catch (err) {
       console.error(`❌ Failed to load ${chapterUrl}: ${err.message}`);
       summary.push({ chapter: chapterNum, success: false, error: err.message });
